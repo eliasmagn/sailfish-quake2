@@ -37,6 +37,8 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/input.h>
+#include <errno.h>
+#include <string.h>
 
 #if !SDL_USE_LIBUDEV
 #include <dirent.h>
@@ -231,6 +233,7 @@ SDL_EVDEV_Init(void)
         /* Force a scan to build the initial device list */
         SDL_UDEV_Scan();
 #else
+        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT, "evdev: performing initial device scan");
         SDL_EVDEV_scan_devices();
 #endif /* SDL_USE_LIBUDEV */
 
@@ -322,9 +325,21 @@ SDL_EVDEV_Poll(void)
     mouse = SDL_GetMouse();
 
     for (item = _this->first; item != NULL; item = item->next) {
+        len = 0;
         while ((len = read(item->fd, events, (sizeof events))) > 0) {
-            len /= sizeof(events[0]);
-            for (i = 0; i < len; ++i) {
+            int num_events = len / (int)sizeof(events[0]);
+
+            SDL_LogDebug(SDL_LOG_CATEGORY_INPUT,
+                         "evdev: read %d events from %s",
+                         num_events,
+                         item->path);
+
+            for (i = 0; i < num_events; ++i) {
+                SDL_LogDebug(SDL_LOG_CATEGORY_INPUT,
+                             "evdev: event type=%hu code=%hu value=%d",
+                             events[i].type,
+                             events[i].code,
+                             events[i].value);
                 /* special handling for touchscreen, that should eventually be
                    used for all devices */
                 if (item->out_of_sync && item->is_touchscreen &&
@@ -504,7 +519,14 @@ SDL_EVDEV_Poll(void)
                     break;
                 }
             }
-        }    
+        }
+
+        if (len < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+            SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                        "evdev: read error on %s: %s",
+                        item->path,
+                        strerror(errno));
+        }
     }
 }
 
@@ -771,6 +793,8 @@ static int
 SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen)
 {
     SDL_evdevlist_item *item;
+    char name[256];
+    int have_name;
 
     /* Check to make sure it's not already in list. */
     for (item = _this->first; item != NULL; item = item->next) {
@@ -786,8 +810,12 @@ SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen)
 
     item->fd = open(dev_path, O_RDONLY | O_NONBLOCK);
     if (item->fd < 0) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: unable to open %s: %s",
+                    dev_path,
+                    strerror(errno));
         SDL_free(item);
-        return SDL_SetError("Unable to open %s", dev_path);
+        return SDL_SetError("Unable to open %s: %s", dev_path, strerror(errno));
     }
 
     item->path = SDL_strdup(dev_path);
@@ -797,11 +825,44 @@ SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen)
         return SDL_OutOfMemory();
     }
 
+    have_name = ioctl(item->fd, EVIOCGNAME(sizeof(name)), name);
+    if (have_name < 0) {
+        name[0] = '\0';
+    } else {
+        if (have_name >= (int)sizeof(name)) {
+            have_name = (int)sizeof(name) - 1;
+        }
+        name[have_name] = '\0';
+    }
+
+    if (have_name == 0) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: opened %s (fd %d)",
+                    dev_path,
+                    item->fd);
+    } else if (have_name > 0) {
+        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: opened %s (fd %d) name='%s'",
+                    dev_path,
+                    item->fd,
+                    name);
+    } else {
+        SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: opened %s (fd %d) but could not query name: %s",
+                    dev_path,
+                    item->fd,
+                    strerror(errno));
+    }
+
 #if SDL_USE_LIBUDEV
     if (is_touchscreen) {
         int ret;
 
         item->is_touchscreen = 1;
+
+        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: %s flagged as touchscreen via udev classification",
+                    dev_path);
 
         if ((ret = SDL_EVDEV_init_touchscreen(item)) < 0) {
             close(item->fd);
@@ -815,6 +876,10 @@ SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen)
         int ret;
 
         item->is_touchscreen = 1;
+
+        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: %s appears to be a touchscreen (fallback detection)",
+                    dev_path);
 
         if ((ret = SDL_EVDEV_init_touchscreen(item)) < 0) {
             close(item->fd);
@@ -844,6 +909,11 @@ SDL_EVDEV_device_added(const char *dev_path, int udev_class)
 {
     SDL_bool is_touchscreen = SDL_FALSE;
 
+    SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+                "evdev: udev reported device %s class=0x%x",
+                dev_path,
+                udev_class);
+
     if (udev_class & SDL_UDEV_DEVICE_TOUCHSCREEN) {
         is_touchscreen = SDL_TRUE;
     }
@@ -864,6 +934,10 @@ SDL_EVDEV_scan_devices(void)
 
     dirp = opendir(input_dir);
     if (!dirp) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: failed to open %s: %s",
+                    input_dir,
+                    strerror(errno));
         return;
     }
 
@@ -877,6 +951,9 @@ SDL_EVDEV_scan_devices(void)
             continue;
         }
 
+        SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+                    "evdev: considering %s for monitoring",
+                    dev_path);
         SDL_EVDEV_add_device(dev_path, SDL_FALSE);
     }
 
@@ -894,6 +971,9 @@ SDL_EVDEV_device_removed(const char *dev_path)
     for (item = _this->first; item != NULL; item = item->next) {
         /* found it, remove it. */
         if (SDL_strcmp(dev_path, item->path) == 0) {
+            SDL_LogInfo(SDL_LOG_CATEGORY_INPUT,
+                        "evdev: removing %s",
+                        dev_path);
             if (prev != NULL) {
                 prev->next = item->next;
             } else {
@@ -915,6 +995,9 @@ SDL_EVDEV_device_removed(const char *dev_path)
         prev = item;
     }
 
+    SDL_LogWarn(SDL_LOG_CATEGORY_INPUT,
+                "evdev: attempted to remove unknown device %s",
+                dev_path);
     return -1;
 }
 

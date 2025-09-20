@@ -118,9 +118,7 @@ static _THIS = NULL;
 
 static SDL_Scancode SDL_EVDEV_translate_keycode(int keycode);
 static void SDL_EVDEV_sync_device(SDL_evdevlist_item *item);
-#if SDL_USE_LIBUDEV
 static int SDL_EVDEV_init_touchscreen(SDL_evdevlist_item* item);
-#endif
 static int SDL_EVDEV_device_removed(const char *dev_path);
 static int SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen);
 
@@ -132,6 +130,59 @@ static void SDL_EVDEV_udev_callback(SDL_UDEV_deviceevent udev_type, int udev_cla
 
 #if !SDL_USE_LIBUDEV
 static void SDL_EVDEV_scan_devices(void);
+#define SDL_EVDEV_BITS_PER_LONG   (sizeof(unsigned long) * 8)
+#define SDL_EVDEV_BITMASK_SIZE(max) (((max) + SDL_EVDEV_BITS_PER_LONG) / SDL_EVDEV_BITS_PER_LONG)
+
+static SDL_bool
+SDL_EVDEV_bitmask_test(const unsigned long *bitmask, int bit)
+{
+    return (bitmask[bit / SDL_EVDEV_BITS_PER_LONG] & (1UL << (bit % SDL_EVDEV_BITS_PER_LONG))) != 0;
+}
+
+static SDL_bool
+SDL_EVDEV_GuessIsTouchscreen(int fd)
+{
+    unsigned long evbit[SDL_EVDEV_BITMASK_SIZE(EV_MAX)];
+    unsigned long absbit[SDL_EVDEV_BITMASK_SIZE(ABS_MAX)];
+    unsigned long keybit[SDL_EVDEV_BITMASK_SIZE(KEY_MAX)];
+
+    SDL_memset(evbit, 0, sizeof(evbit));
+    if (ioctl(fd, EVIOCGBIT(0, sizeof(evbit)), evbit) < 0) {
+        return SDL_FALSE;
+    }
+
+    if (!SDL_EVDEV_bitmask_test(evbit, EV_ABS)) {
+        return SDL_FALSE;
+    }
+
+    SDL_memset(absbit, 0, sizeof(absbit));
+    if (ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(absbit)), absbit) < 0) {
+        return SDL_FALSE;
+    }
+
+    if (SDL_EVDEV_bitmask_test(absbit, ABS_MT_POSITION_X) &&
+        SDL_EVDEV_bitmask_test(absbit, ABS_MT_POSITION_Y)) {
+        return SDL_TRUE;
+    }
+
+    if (!SDL_EVDEV_bitmask_test(absbit, ABS_X) ||
+        !SDL_EVDEV_bitmask_test(absbit, ABS_Y)) {
+        return SDL_FALSE;
+    }
+
+    SDL_memset(keybit, 0, sizeof(keybit));
+    if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keybit)), keybit) < 0) {
+        return SDL_FALSE;
+    }
+
+    if (SDL_EVDEV_bitmask_test(keybit, BTN_TOUCH) ||
+        SDL_EVDEV_bitmask_test(keybit, BTN_STYLUS) ||
+        SDL_EVDEV_bitmask_test(keybit, BTN_TOOL_FINGER)) {
+        return SDL_TRUE;
+    }
+
+    return SDL_FALSE;
+}
 #endif
 
 static Uint8 EVDEV_MouseButtons[] = {
@@ -481,7 +532,6 @@ SDL_EVDEV_translate_keycode(int keycode)
     return scancode;
 }
 
-#ifdef SDL_USE_LIBUDEV
 static int
 SDL_EVDEV_init_touchscreen(SDL_evdevlist_item* item)
 {
@@ -581,8 +631,6 @@ SDL_EVDEV_init_touchscreen(SDL_evdevlist_item* item)
 
     return 0;
 }
-#endif /* SDL_USE_LIBUDEV */
-
 static void
 SDL_EVDEV_destroy_touchscreen(SDL_evdevlist_item* item) {
     if (!item->is_touchscreen)
@@ -763,6 +811,18 @@ SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen)
         }
     }
 #else
+    if (SDL_EVDEV_GuessIsTouchscreen(item->fd)) {
+        int ret;
+
+        item->is_touchscreen = 1;
+
+        if ((ret = SDL_EVDEV_init_touchscreen(item)) < 0) {
+            close(item->fd);
+            SDL_free(item->path);
+            SDL_free(item);
+            return ret;
+        }
+    }
     (void)is_touchscreen;
 #endif
 

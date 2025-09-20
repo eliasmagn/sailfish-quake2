@@ -10,6 +10,13 @@
 #endif
 #include <SDL.h>
 
+#include <ctype.h>
+#include <stddef.h>
+
+#if defined(__linux__)
+#include <linux/input.h>
+#endif
+
 #define MOUSE_MAX 3000
 #define MOUSE_MIN 40
 
@@ -139,6 +146,181 @@ void transformTouch( float *x, float *y ) {
 
 // convert joy sholder to mouse button
 static bool joy_shoulder_to_mouse_button[2] = { false, false };
+
+#if defined(__linux__)
+typedef struct
+{
+        uint16_t keycode;
+        char normal;
+        char shift;
+        char altgr;
+        char shift_altgr;
+        bool is_alpha;
+} in_evdev_char_map_t;
+
+static const in_evdev_char_map_t in_evdev_char_map[] = {
+        { KEY_SPACE, ' ', ' ', 0, 0, false },
+        { KEY_APOSTROPHE, '\'', '"', 0, 0, false },
+        { KEY_COMMA, ',', '<', 0, 0, false },
+        { KEY_DOT, '.', '>', 0, 0, false },
+        { KEY_SLASH, '/', '?', 0, 0, false },
+        { KEY_SEMICOLON, ';', ':', 0, 0, false },
+        { KEY_EQUAL, '=', '+', '~', '~', false },
+        { KEY_MINUS, '-', '_', '\\', '|', false },
+        { KEY_LEFTBRACE, '[', '{', 0, 0, false },
+        { KEY_RIGHTBRACE, ']', '}', 0, 0, false },
+        { KEY_BACKSLASH, '\\', '|', 0, 0, false },
+        { KEY_GRAVE, '`', '~', 0, 0, false },
+        { KEY_102ND, '<', '>', '|', '|', false },
+        { KEY_1, '1', '!', 0, 0, false },
+        { KEY_2, '2', '@', 0, 0, false },
+        { KEY_3, '3', '#', 0, 0, false },
+        { KEY_4, '4', '$', 0, 0, false },
+        { KEY_5, '5', '%', 0, 0, false },
+        { KEY_6, '6', '^', 0, 0, false },
+        { KEY_7, '7', '&', '{', '{', false },
+        { KEY_8, '8', '*', '[', '[', false },
+        { KEY_9, '9', '(', ']', ']', false },
+        { KEY_0, '0', ')', '}', '}', false },
+        { KEY_A, 'a', 'A', 0, 0, true },
+        { KEY_B, 'b', 'B', 0, 0, true },
+        { KEY_C, 'c', 'C', 0, 0, true },
+        { KEY_D, 'd', 'D', 0, 0, true },
+        { KEY_E, 'e', 'E', 0, 0, true },
+        { KEY_F, 'f', 'F', 0, 0, true },
+        { KEY_G, 'g', 'G', 0, 0, true },
+        { KEY_H, 'h', 'H', 0, 0, true },
+        { KEY_I, 'i', 'I', 0, 0, true },
+        { KEY_J, 'j', 'J', 0, 0, true },
+        { KEY_K, 'k', 'K', 0, 0, true },
+        { KEY_L, 'l', 'L', 0, 0, true },
+        { KEY_M, 'm', 'M', 0, 0, true },
+        { KEY_N, 'n', 'N', 0, 0, true },
+        { KEY_O, 'o', 'O', 0, 0, true },
+        { KEY_P, 'p', 'P', 0, 0, true },
+        { KEY_Q, 'q', 'Q', '@', '@', true },
+        { KEY_R, 'r', 'R', 0, 0, true },
+        { KEY_S, 's', 'S', 0, 0, true },
+        { KEY_T, 't', 'T', 0, 0, true },
+        { KEY_U, 'u', 'U', 0, 0, true },
+        { KEY_V, 'v', 'V', 0, 0, true },
+        { KEY_W, 'w', 'W', 0, 0, true },
+        { KEY_X, 'x', 'X', 0, 0, true },
+        { KEY_Y, 'y', 'Y', 0, 0, true },
+        { KEY_Z, 'z', 'Z', 0, 0, true },
+        { KEY_KP0, '0', 0, 0, 0, false },
+        { KEY_KP1, '1', 0, 0, 0, false },
+        { KEY_KP2, '2', 0, 0, 0, false },
+        { KEY_KP3, '3', 0, 0, 0, false },
+        { KEY_KP4, '4', 0, 0, 0, false },
+        { KEY_KP5, '5', 0, 0, 0, false },
+        { KEY_KP6, '6', 0, 0, 0, false },
+        { KEY_KP7, '7', 0, 0, 0, false },
+        { KEY_KP8, '8', 0, 0, 0, false },
+        { KEY_KP9, '9', 0, 0, 0, false },
+        { KEY_KPDOT, '.', 0, 0, 0, false },
+        { KEY_KPCOMMA, ',', 0, 0, 0, false },
+        { KEY_KPSLASH, '/', 0, 0, 0, false },
+        { KEY_KPASTERISK, '*', 0, 0, 0, false },
+        { KEY_KPMINUS, '-', 0, 0, 0, false },
+        { KEY_KPPLUS, '+', 0, 0, 0, false },
+};
+
+static bool in_evdev_capslock_active = false;
+static bool in_evdev_altgr_active = false;
+
+static const in_evdev_char_map_t *IN_EvdevFindCharMap(uint16_t keycode)
+{
+        size_t count = sizeof(in_evdev_char_map) / sizeof(in_evdev_char_map[0]);
+        for (size_t i = 0; i < count; ++i)
+        {
+                if (in_evdev_char_map[i].keycode == keycode)
+                        return &in_evdev_char_map[i];
+        }
+
+        return NULL;
+}
+
+static char IN_EvdevApplyModifiers(const in_evdev_char_map_t *entry, bool shift, bool caps, bool altgr)
+{
+        if (altgr)
+        {
+                if (shift && entry->shift_altgr)
+                        return entry->shift_altgr;
+
+                if (entry->altgr)
+                        return entry->altgr;
+        }
+
+        char base = entry->normal;
+
+        if (entry->is_alpha)
+        {
+                unsigned char lower = (unsigned char)tolower((unsigned char)base);
+                unsigned char upper = entry->shift ? (unsigned char)entry->shift : (unsigned char)toupper(lower);
+                return (shift ^ caps) ? (char)upper : (char)lower;
+        }
+
+        if (shift && entry->shift)
+                return entry->shift;
+
+        return base;
+}
+
+bool IN_EvdevHandleKeyboard(const struct input_event *event)
+{
+        if (!event || event->type != EV_KEY)
+                return false;
+
+        if (event->code == KEY_CAPSLOCK)
+        {
+                if (event->value == 1)
+                        in_evdev_capslock_active = !in_evdev_capslock_active;
+
+                return false;
+        }
+
+        if (event->code == KEY_RIGHTALT)
+        {
+                if (event->value == 0)
+                        in_evdev_altgr_active = false;
+                else
+                        in_evdev_altgr_active = true;
+
+                return false;
+        }
+
+        if (event->value != 1 && event->value != 2)
+                return false;
+
+        const in_evdev_char_map_t *entry = IN_EvdevFindCharMap(event->code);
+        if (!entry)
+                return false;
+
+        bool ctrl_down = Key_IsDown(K_CTRL);
+        bool alt_down = Key_IsDown(K_ALT);
+        bool altgr_down = in_evdev_altgr_active;
+        bool shift_down = Key_IsDown(K_SHIFT);
+
+        bool plain_alt = alt_down && !altgr_down;
+        if (ctrl_down || plain_alt)
+                return false;
+
+        char translated = IN_EvdevApplyModifiers(entry, shift_down, in_evdev_capslock_active, altgr_down);
+        if (!translated)
+                return false;
+
+        Char_Event((unsigned char)translated, false);
+        return true;
+}
+#else
+struct input_event;
+bool IN_EvdevHandleKeyboard(const struct input_event *event)
+{
+        (void)event;
+        return false;
+}
+#endif
 
 static int IN_TranslateSDLtoQ2Key(Sint32 keysym)
 {

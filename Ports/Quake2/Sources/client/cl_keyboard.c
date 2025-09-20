@@ -1121,6 +1121,14 @@ void Key_Event(int key, bool down)
     Char_Event(key, true);
 }
 
+bool Key_IsDown(int key)
+{
+    if (key < 0 || key >= K_LAST)
+        return false;
+
+    return keydown[key];
+}
+
 /*
  * Marks all keys as "up"
  */

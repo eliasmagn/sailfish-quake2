@@ -30,10 +30,16 @@
 #include "SDL_nullvideo.h"
 #include "SDL_nullevents_c.h"
 
+#if defined(SDL_INPUT_LINUXEV)
+#include "../../core/linux/SDL_evdev.h"
+#endif
+
 void
 DUMMY_PumpEvents(_THIS)
 {
-    /* do nothing. */
+#if defined(SDL_INPUT_LINUXEV)
+    SDL_EVDEV_Poll();
+#endif
 }
 
 #endif /* SDL_VIDEO_DRIVER_DUMMY */

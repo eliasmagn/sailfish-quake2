@@ -39,6 +39,7 @@
 
 #include "SDL_video.h"
 #include "SDL_mouse.h"
+#include "SDL_log.h"
 #include "../SDL_sysvideo.h"
 #include "../SDL_pixels_c.h"
 #include "../../events/SDL_events_c.h"
@@ -46,6 +47,10 @@
 #include "SDL_nullvideo.h"
 #include "SDL_nullevents_c.h"
 #include "SDL_nullframebuffer_c.h"
+
+#if defined(SDL_INPUT_LINUXEV)
+#include "../../core/linux/SDL_evdev.h"
+#endif
 
 #define DUMMYVID_DRIVER_NAME "dummy"
 
@@ -111,6 +116,14 @@ DUMMY_VideoInit(_THIS)
 {
     SDL_DisplayMode mode;
 
+#if defined(SDL_INPUT_LINUXEV)
+    if (SDL_EVDEV_Init() < 0) {
+        SDL_LogWarn(SDL_LOG_CATEGORY_VIDEO,
+                    "dummy video: failed to initialise evdev input: %s",
+                    SDL_GetError());
+    }
+#endif
+
     /* Use a fake 32-bpp desktop mode */
     mode.format = SDL_PIXELFORMAT_RGB888;
     mode.w = 1024;
@@ -137,6 +150,9 @@ DUMMY_SetDisplayMode(_THIS, SDL_VideoDisplay * display, SDL_DisplayMode * mode)
 void
 DUMMY_VideoQuit(_THIS)
 {
+#if defined(SDL_INPUT_LINUXEV)
+    SDL_EVDEV_Quit();
+#endif
 }
 
 #endif /* SDL_VIDEO_DRIVER_DUMMY */

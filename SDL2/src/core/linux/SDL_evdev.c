@@ -38,6 +38,14 @@
 #include <sys/ioctl.h>
 #include <linux/input.h>
 
+#if !SDL_USE_LIBUDEV
+#include <dirent.h>
+#include <limits.h>
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+#endif
+
 #include "SDL.h"
 #include "SDL_assert.h"
 #include "SDL_endian.h"
@@ -110,13 +118,21 @@ static _THIS = NULL;
 
 static SDL_Scancode SDL_EVDEV_translate_keycode(int keycode);
 static void SDL_EVDEV_sync_device(SDL_evdevlist_item *item);
+#if SDL_USE_LIBUDEV
+static int SDL_EVDEV_init_touchscreen(SDL_evdevlist_item* item);
+#endif
 static int SDL_EVDEV_device_removed(const char *dev_path);
+static int SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen);
 
 #if SDL_USE_LIBUDEV
 static int SDL_EVDEV_device_added(const char *dev_path, int udev_class);
 static void SDL_EVDEV_udev_callback(SDL_UDEV_deviceevent udev_type, int udev_class,
     const char *dev_path);
 #endif /* SDL_USE_LIBUDEV */
+
+#if !SDL_USE_LIBUDEV
+static void SDL_EVDEV_scan_devices(void);
+#endif
 
 static Uint8 EVDEV_MouseButtons[] = {
     SDL_BUTTON_LEFT,            /*  BTN_LEFT        0x110 */
@@ -164,7 +180,7 @@ SDL_EVDEV_Init(void)
         /* Force a scan to build the initial device list */
         SDL_UDEV_Scan();
 #else
-        /* TODO: Scan the devices manually, like a caveman */
+        SDL_EVDEV_scan_devices();
 #endif /* SDL_USE_LIBUDEV */
 
         _this->kbd = SDL_EVDEV_kbd_init();
@@ -703,11 +719,9 @@ SDL_EVDEV_sync_device(SDL_evdevlist_item *item)
 #endif /* EVIOCGMTSLOTS */
 }
 
-#if SDL_USE_LIBUDEV
 static int
-SDL_EVDEV_device_added(const char *dev_path, int udev_class)
+SDL_EVDEV_add_device(const char *dev_path, SDL_bool is_touchscreen)
 {
-    int ret;
     SDL_evdevlist_item *item;
 
     /* Check to make sure it's not already in list. */
@@ -735,15 +749,22 @@ SDL_EVDEV_device_added(const char *dev_path, int udev_class)
         return SDL_OutOfMemory();
     }
 
-    if (udev_class & SDL_UDEV_DEVICE_TOUCHSCREEN) {
+#if SDL_USE_LIBUDEV
+    if (is_touchscreen) {
+        int ret;
+
         item->is_touchscreen = 1;
 
         if ((ret = SDL_EVDEV_init_touchscreen(item)) < 0) {
             close(item->fd);
+            SDL_free(item->path);
             SDL_free(item);
             return ret;
         }
     }
+#else
+    (void)is_touchscreen;
+#endif
 
     if (_this->last == NULL) {
         _this->first = _this->last = item;
@@ -756,7 +777,53 @@ SDL_EVDEV_device_added(const char *dev_path, int udev_class)
 
     return _this->num_devices++;
 }
+
+#if SDL_USE_LIBUDEV
+static int
+SDL_EVDEV_device_added(const char *dev_path, int udev_class)
+{
+    SDL_bool is_touchscreen = SDL_FALSE;
+
+    if (udev_class & SDL_UDEV_DEVICE_TOUCHSCREEN) {
+        is_touchscreen = SDL_TRUE;
+    }
+
+    return SDL_EVDEV_add_device(dev_path, is_touchscreen);
+}
 #endif /* SDL_USE_LIBUDEV */
+
+#if !SDL_USE_LIBUDEV
+static void
+SDL_EVDEV_scan_devices(void)
+{
+    DIR *dirp;
+    struct dirent *dent;
+    char dev_path[PATH_MAX];
+    static const char input_dir[] = "/dev/input";
+    int len;
+
+    dirp = opendir(input_dir);
+    if (!dirp) {
+        return;
+    }
+
+    while ((dent = readdir(dirp)) != NULL) {
+        if (SDL_strncmp(dent->d_name, "event", 5) != 0) {
+            continue;
+        }
+
+        len = SDL_snprintf(dev_path, sizeof(dev_path), "%s/%s", input_dir, dent->d_name);
+        if (len < 0 || len >= (int)sizeof(dev_path)) {
+            continue;
+        }
+
+        SDL_EVDEV_add_device(dev_path, SDL_FALSE);
+    }
+
+    closedir(dirp);
+}
+#endif /* !SDL_USE_LIBUDEV */
+
 
 static int
 SDL_EVDEV_device_removed(const char *dev_path)

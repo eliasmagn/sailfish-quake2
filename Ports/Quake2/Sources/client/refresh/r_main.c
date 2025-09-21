@@ -1,9 +1,14 @@
 #include "client/client.h"
 #include "client/keyboard.h"
 #include "client/refresh/r_private.h"
+#include "backends/input.h"
 
-// #undef SAILFISH_FBO
-#ifdef SAILFISH_FBO
+#if defined(SAILFISH_FBO) && !defined(ENABLE_TOUCH_OVERLAY)
+#define ENABLE_TOUCH_OVERLAY
+#endif
+
+// #undef ENABLE_TOUCH_OVERLAY
+#if defined(ENABLE_TOUCH_OVERLAY)
 // SailfishOS
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
@@ -13,8 +18,8 @@
 #include <SDL/gl_vkb.h>
 // DEBUG _ GL
 // #	define DEBUG_GL
-// #define DEPTH_AS_TEXTURE 
-#endif // SAILFISH_FBO
+// #define DEPTH_AS_TEXTURE
+#endif // ENABLE_TOUCH_OVERLAY
 
 #ifdef DEBUG_GL
 	/**
@@ -158,9 +163,11 @@ cvar_t *r_subdivision;
 
 cvar_t *r_fullscreenflash;
 cvar_t *r_lightflash;
-#ifdef SAILFISH_FBO
 cvar_t *r_rotaterender;
 cvar_t *r_sizerender;
+
+#if defined(ENABLE_TOUCH_OVERLAY)
+#define TOUCH_OVERLAY_DEFAULT_SCALE 0.5f
 
 enum SizeRender {
 	SIZE_100 = 0,
@@ -184,12 +191,12 @@ extern cvar_t *gl_hudscale; /* named for consistency with R1Q2 */
 extern cvar_t *gl_consolescale;
 extern cvar_t *gl_menuscale;
 
-#ifdef SAILFISH_FBO 
+#if defined(ENABLE_TOUCH_OVERLAY)
 struct _sailfish_fbo {
-	// GLuint quad_VertexArrayID;
-	GLuint quad_vertexbuffer;
-	GLuint quad_programID[2];
-	GLuint u_texID[2];
+        // GLuint quad_VertexArrayID;
+        GLuint quad_vertexbuffer;
+        GLuint quad_programID[2];
+        GLuint u_texID[2];
 	GLuint u_gammaID[2];
 	// GLuint u_orientationID;
 	GLuint Framebuffer;
@@ -206,23 +213,121 @@ struct _sailfish_fbo {
 };
 typedef struct _sailfish_fbo SailfishFBO;
 SailfishFBO sailfish_fbo = {
-	//0, //quad vertex array id 
-	0, //vertex buffer
+        //0, //quad vertex array id
+        0, //vertex buffer
 	{0,0}, // program ID 
 	{0,0}, // texture ID 
 	{0,0}, // gamma ID 
 	0,0,0,0,0,0,
 	0,0,0,0, // vw, vh, bw, bh
-	SAILFISH_FBO_DEFAULT_SCALE, // fbo scale
+	TOUCH_OVERLAY_DEFAULT_SCALE, // fbo scale
 	{
 		-1.0f, -1.0f, 0.0f, 0.0f, 1.0f, //0
 	  	 1.0f, -1.0f, 0.0f, 1.0f, 1.0f, //1
 		-1.0f,  1.0f, 0.0f, 0.0f, 0.0f, //2
 		-1.0f,  1.0f, 0.0f, 0.0f, 0.0f,//3
 		1.0f, -1.0f, 0.0f,  1.0f, 1.0f, //4
-		1.0f,  1.0f, 0.0f,  1.0f, 0.0f //5
-	}
+                1.0f,  1.0f, 0.0f,  1.0f, 0.0f //5
+        }
 };
+
+static bool touch_overlay_enabled = false;
+static int touch_overlay_native_width = 0;
+static int touch_overlay_native_height = 0;
+
+static bool R_TouchOverlayResourcesAvailable(void)
+{
+        return sailfish_fbo.Framebuffer != 0 && sailfish_fbo.RenderedTexture != 0;
+}
+
+static bool R_TouchOverlayShouldRender(void)
+{
+        return touch_overlay_enabled && IN_TouchOverlayActive() && R_TouchOverlayResourcesAvailable();
+}
+
+static void R_TouchOverlayFetchNativeSize(int *width, int *height)
+{
+        if (!width || !height)
+                return;
+
+        int native_width = viddef.width;
+        int native_height = viddef.height;
+
+        SdlwContext *sdlw = sdlwContext;
+        if (sdlw && sdlw->window)
+        {
+#if defined(SAILFISHOS)
+                SDL_GetWindowSize(sdlw->window, &native_height, &native_width);
+#else
+                SDL_GetWindowSize(sdlw->window, &native_width, &native_height);
+#endif
+        }
+
+        *width = native_width;
+        *height = native_height;
+}
+
+static void R_TouchOverlayUpdateState(void)
+{
+        bool previously_enabled = touch_overlay_enabled;
+
+        SDL_ShowCursor(IN_TouchOverlayActive() ? 1 : 0);
+
+        if (IN_TouchOverlayActive())
+        {
+                int native_width = 0;
+                int native_height = 0;
+                R_TouchOverlayFetchNativeSize(&native_width, &native_height);
+
+                if (native_width > 0 && native_height > 0)
+                {
+                        bool needs_resources = (sailfish_fbo.Framebuffer == 0 ||
+                                                sailfish_fbo.vw != (GLuint)native_width ||
+                                                sailfish_fbo.vh != (GLuint)native_height ||
+                                                sailfish_fbo.RenderedTexture == 0);
+
+                        touch_overlay_native_width = native_width;
+                        touch_overlay_native_height = native_height;
+
+                        if (needs_resources)
+                        {
+                                create_fbo((GLuint)native_width, (GLuint)native_height);
+                                if (sailfish_fbo.quad_vertexbuffer == 0)
+                                        create_fbo_quad();
+                        }
+
+                        touch_overlay_enabled = R_TouchOverlayResourcesAvailable();
+
+                        if (touch_overlay_enabled && (needs_resources || !previously_enabled))
+                                bind_fbo();
+                }
+                else
+                {
+                        touch_overlay_enabled = false;
+                }
+        }
+        else
+        {
+                if (R_TouchOverlayResourcesAvailable())
+                {
+                        int native_width = touch_overlay_native_width;
+                        int native_height = touch_overlay_native_height;
+                        if (native_width <= 0 || native_height <= 0)
+                                R_TouchOverlayFetchNativeSize(&native_width, &native_height);
+
+                        if (native_width > 0 && native_height > 0)
+                        {
+                                viddef.width = native_width;
+                                viddef.height = native_height;
+                        }
+
+                        sdlwSetFboScale(1.0f);
+                        destroy_fbo();
+                        GL_CHECK( glBindFramebuffer(GL_FRAMEBUFFER, 0) );
+                }
+                touch_overlay_enabled = false;
+        }
+}
 #endif
 
 //********************************************************************************
@@ -3511,12 +3616,16 @@ static void R_Frame_clear(int eyeIndex)
 
 void R_Frame_begin(float camera_separation, int eyeIndex)
 {
-	gl_state.camera_separation = camera_separation;
+        gl_state.camera_separation = camera_separation;
     gl_state.eyeIndex = eyeIndex;
 
-	// force a r_restart if gl_stereo has been modified.
-	if (gl_state.stereo_mode != gl_stereo->value)
-		gl_state.stereo_mode = gl_stereo->value;
+#if defined(ENABLE_TOUCH_OVERLAY)
+        R_TouchOverlayUpdateState();
+#endif
+
+        // force a r_restart if gl_stereo has been modified.
+        if (gl_state.stereo_mode != gl_stereo->value)
+                gl_state.stereo_mode = gl_stereo->value;
 
 	if (r_gamma->modified)
 	{
@@ -3557,14 +3666,17 @@ void R_Frame_begin(float camera_separation, int eyeIndex)
 	oglwEnableStencilTest(false);
 }
 
-#ifdef SAILFISH_FBO
+#ifdef ENABLE_TOUCH_OVERLAY
 
 void bind_fbo() {
-	if( sailfish_fbo.Framebuffer == 0 )
-		return; 
-	
-	GL_CHECK( glBindFramebuffer(GL_FRAMEBUFFER, sailfish_fbo.Framebuffer) );
-	// GL_CHECK( glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sailfish_fbo.RenderedTexture, 0) );
+        if (!R_TouchOverlayShouldRender())
+                return;
+
+        if( sailfish_fbo.Framebuffer == 0 )
+                return;
+
+        GL_CHECK( glBindFramebuffer(GL_FRAMEBUFFER, sailfish_fbo.Framebuffer) );
+        // GL_CHECK( glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sailfish_fbo.RenderedTexture, 0) );
 	// GL_CHECK( glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, sailfish_fbo.DepthBuffer) );
 	// GL_CHECK( glViewport(0,0,vw,vh) );
 	oglwSetViewport(0,0,sailfish_fbo.vw,sailfish_fbo.vh);
@@ -3578,24 +3690,27 @@ void bind_fbo() {
  * 
  * */
 void draw_fbo_quad() {
-	if( sailfish_fbo.RenderedTexture == 0)
-		return;
-	// here we draw virtual keyboard layer
-	switch(cls.key_dest) {
-	case key_menu:
-		vkb_SetClientState(Client_In_Menu);
-		break;
-	case key_console:
-		vkb_SetClientState(Client_In_Console);
-		break;
-	case key_game:
-		vkb_SetClientState(Client_In_Game);
-		break;
-	case key_message:
-		vkb_SetClientState(Client_In_Message);
-		break;
-	}
-	vkb_RenderGLVKB();
+        if (!R_TouchOverlayShouldRender())
+                return;
+        if( sailfish_fbo.RenderedTexture == 0)
+                return;
+        // here we draw virtual keyboard layer
+        switch(cls.key_dest) {
+        case key_menu:
+                vkb_SetClientState(Client_In_Menu);
+                break;
+        case key_console:
+                vkb_SetClientState(Client_In_Console);
+                break;
+        case key_game:
+                vkb_SetClientState(Client_In_Game);
+                break;
+        case key_message:
+                vkb_SetClientState(Client_In_Message);
+                break;
+        }
+        if (IN_TouchOverlayActive())
+                vkb_RenderGLVKB();
 	// than we draw result frame on screen
 	( glBindFramebuffer(GL_FRAMEBUFFER, 0) ); // this return glError! is this normal?
 	glGetError();
@@ -3607,7 +3722,7 @@ void draw_fbo_quad() {
 #else 
 	GL_CHECK( glViewport(0,0,sailfish_fbo.vw,sailfish_fbo.vh) );
 #endif
-#if defined(SAILFISH_FBO) && !defined(SAILFISHOS)
+#if defined(ENABLE_TOUCH_OVERLAY) && !defined(SAILFISHOS)
 	if( r_rotaterender->value == 1)
 		shader_index = 1 - shader_index;
 #endif 
@@ -3653,8 +3768,10 @@ void draw_fbo_quad() {
  * 
  */
 void create_fbo_quad() {
-	if(sailfish_fbo.quad_vertexbuffer != 0)
-		return;
+        if (!IN_TouchOverlayActive())
+                return;
+        if(sailfish_fbo.quad_vertexbuffer != 0)
+                return;
 	// The fullscreen quad's FBO
 	// GL_CHECK( glGenVertexArrays(1, &sailfish_fbo.quad_VertexArrayID) );
 	// GL_CHECK( glBindVertexArray(sailfish_fbo.quad_VertexArrayID) );
@@ -3732,26 +3849,31 @@ void create_fbo_quad() {
 	GL_CHECK( glBindVertexArray(GL_NONE) );
 }
 
-void remove_fbo() {
-	if( sailfish_fbo.Framebuffer == 0 )
-		return;
-	vkb_DeleteGLVKB();
-	glDeleteTextures(1, &sailfish_fbo.RenderedTexture);
-	sailfish_fbo.RenderedTexture = GL_NONE;
-	glDeleteRenderbuffers(1, &sailfish_fbo.DepthBuffer);
-	sailfish_fbo.DepthBuffer = GL_NONE;
-	glDeleteFramebuffers(1, &sailfish_fbo.Framebuffer);
-	sailfish_fbo.Framebuffer = GL_NONE;
+void destroy_fbo() {
+        if( sailfish_fbo.Framebuffer == 0 )
+                return;
+        vkb_DeleteGLVKB();
+        glDeleteTextures(1, &sailfish_fbo.RenderedTexture);
+        sailfish_fbo.RenderedTexture = GL_NONE;
+        glDeleteRenderbuffers(1, &sailfish_fbo.DepthBuffer);
+        sailfish_fbo.DepthBuffer = GL_NONE;
+        glDeleteFramebuffers(1, &sailfish_fbo.Framebuffer);
+        sailfish_fbo.Framebuffer = GL_NONE;
+        sailfish_fbo.bw = 0;
+        sailfish_fbo.bh = 0;
+        sailfish_fbo.vs = TOUCH_OVERLAY_DEFAULT_SCALE;
 }
 /** Create FBO with color texture and depth render buffer
- * 
+ *
  */
 void create_fbo(GLuint w, GLuint h) {
-	GLuint dims[2];
-	glGetIntegerv(GL_MAX_VIEWPORT_DIMS, &dims[0]);
+        if (!IN_TouchOverlayActive())
+                return;
+        GLuint dims[2];
+        glGetIntegerv(GL_MAX_VIEWPORT_DIMS, &dims[0]);
 	//============================================================================= begin
 	if( sailfish_fbo.Framebuffer != 0 ) {
-		remove_fbo();
+		destroy_fbo();
 	}
 	if( sailfish_fbo.Framebuffer == 0 ) {
 		// R_printf(PRINT_ALL, "Max Framebuffer texture size is %i x %i ;\n", (int)dims[0], (int)dims[1]);
@@ -3767,7 +3889,7 @@ void create_fbo(GLuint w, GLuint h) {
 		}
 
 		if( sailfish_fbo.vs > 1.0f || sailfish_fbo.vs < 0.15f )
-			sailfish_fbo.vs = SAILFISH_FBO_DEFAULT_SCALE;
+			sailfish_fbo.vs = TOUCH_OVERLAY_DEFAULT_SCALE;
 		sdlwSetFboScale(sailfish_fbo.vs);
 		sailfish_fbo.vw =  w;
 		sailfish_fbo.vh =  h;
@@ -3856,18 +3978,21 @@ void create_fbo(GLuint w, GLuint h) {
 		// GL_CHECK( glBindRenderbuffer(GL_RENDERBUFFER, GL_NONE) );
 		// GL_CHECK( glBindTexture(GL_TEXTURE_2D, GL_NONE) );
 
-		// create VKB 
-		vkb_NewGLVKB(0,0,1, sailfish_fbo.bw, sailfish_fbo.bh);
-		vkb_SetKeyBindinds(keybindings);
-		vkb_SetAddCommandFunction(Cbuf_AddText);
-		vkb_SetClientState(Client_In_Menu);
+                // create VKB
+                if (IN_TouchOverlayActive())
+                {
+                        vkb_NewGLVKB(0,0,1, sailfish_fbo.bw, sailfish_fbo.bh);
+                        vkb_SetKeyBindinds(keybindings);
+                        vkb_SetAddCommandFunction(Cbuf_AddText);
+                        vkb_SetClientState(Client_In_Menu);
+                }
 	}
 }
 #endif
 
 void R_Frame_end()
 {
-// #ifdef SAILFISH_FBO
+// #ifdef ENABLE_TOUCH_OVERLAY
 	// static unsigned long long frame_Count = 0;
 // #endif
 	if (r_discardframebuffer->value && gl_config.discardFramebuffer)
@@ -3880,25 +4005,30 @@ void R_Frame_end()
         #endif
 	}
 
-#ifdef SAILFISH_FBO
-	// TODO Sailfish here we should unbind our buffer and draw it on quad
-	// ============================================================================= begin
+#if defined(ENABLE_TOUCH_OVERLAY)
+        if (R_TouchOverlayShouldRender())
+        {
+                if (sailfish_fbo.quad_vertexbuffer == 0)
+                        create_fbo_quad();
 
-	if(sailfish_fbo.quad_vertexbuffer == 0)
-		create_fbo_quad();
-
-	draw_fbo_quad();
-	// ============================================================================= ebnd
-#endif // SAILFISH_FBO
+                draw_fbo_quad();
+        }
+#endif // ENABLE_TOUCH_OVERLAY
 
 	eglwSwapBuffers();
 	Gles_checkGlesError();
 	Gles_checkEglError();
 
 	// Render to our framebuffer
-#ifdef SAILFISH_FBO
-	bind_fbo();
-	// =============================================================================
+#if defined(ENABLE_TOUCH_OVERLAY)
+        if (R_TouchOverlayShouldRender())
+        {
+                bind_fbo();
+        }
+        else
+        {
+                GL_CHECK( glBindFramebuffer(GL_FRAMEBUFFER, 0) );
+        }
 #endif
 }
 
@@ -4198,9 +4328,12 @@ static void R_Window_getValidWindowSize(int maxWindowWidth, int maxWindowHeight,
         requestedWidth = R_WIDTH_MIN;
     if (requestedHeight < R_HEIGHT_MIN)
         requestedHeight = R_HEIGHT_MIN;
-#if defined(SAILFISH_FBO) && defined(SAILFISHOS)
-    requestedHeight = maxWindowWidth;
-    requestedWidth = maxWindowHeight;
+#if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
+    if (IN_TouchOverlayActive())
+    {
+        requestedHeight = maxWindowWidth;
+        requestedWidth = maxWindowHeight;
+    }
 #endif
     *windowWidth = requestedWidth;
     *windowHeight = requestedHeight;
@@ -4254,11 +4387,13 @@ static bool R_Window_update(bool forceFlag)
 
         bool updateNeeded = false;
 
-        #if defined(R_WINDOWED_MODE_DISABLED) || (defined(SAILFISHOS) && defined(SAILFISH_FBO))
+        #if defined(R_WINDOWED_MODE_DISABLED)
         bool fullscreen = true;
+        #elif defined(SAILFISHOS) && defined(ENABLE_TOUCH_OVERLAY)
+        bool fullscreen = IN_TouchOverlayActive() ? true : r_fullscreen->value;
         #else
         bool fullscreen = r_fullscreen->value;
-		#endif
+                #endif
 
         if (sdlw->window == NULL)
         {
@@ -4275,10 +4410,13 @@ static bool R_Window_update(bool forceFlag)
             if (fullscreen)
 				flags |= SDL_WINDOW_FULLSCREEN;
 			#endif
-			#if defined(SAILFISH_FBO) && defined(SAILFISHOS)
-				creationWidth = windowHeight;
-				creationHeight = windowWidth;
-			#endif
+                        #if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
+                                if (IN_TouchOverlayActive())
+                                {
+                                        creationWidth = windowHeight;
+                                        creationHeight = windowWidth;
+                                }
+                        #endif
 			R_printf(PRINT_ALL, "Creating a window with width=%i height=%i fullscreen=%i\n", creationWidth, creationHeight, fullscreen);
             if (!sdlwCreateWindow(windowName, creationWidth, creationHeight, flags))
             {
@@ -4337,11 +4475,18 @@ static bool R_Window_update(bool forceFlag)
             if (!currentFullscreen)
             {
                 int currentWidth, currentHeight;
-			#if defined(SAILFISH_FBO) && defined(SAILFISHOS)
-				SDL_GetWindowSize(sdlw->window, &currentHeight, &currentWidth);
-			#else
+                        #if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
+                                if (IN_TouchOverlayActive())
+                                {
+                                        SDL_GetWindowSize(sdlw->window, &currentHeight, &currentWidth);
+                                }
+                                else
+                                {
+                                        SDL_GetWindowSize(sdlw->window, &currentWidth, &currentHeight);
+                                }
+                        #else
                 SDL_GetWindowSize(sdlw->window, &currentWidth, &currentHeight);
-			#endif
+                        #endif
                 if (windowWidth != currentWidth || windowHeight != currentHeight)
                 {
                     updateNeeded = true;
@@ -4424,22 +4569,29 @@ static bool R_Window_update(bool forceFlag)
     }
     
 	int effectiveWidth, effectiveHeight;
-#if defined(SAILFISH_FBO) && defined(SAILFISHOS)
-	SDL_GetWindowSize(sdlw->window, &effectiveHeight, &effectiveWidth);
+#if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
+        if (IN_TouchOverlayActive())
+        {
+                SDL_GetWindowSize(sdlw->window, &effectiveHeight, &effectiveWidth);
+        }
+        else
+        {
+                SDL_GetWindowSize(sdlw->window, &effectiveWidth, &effectiveHeight);
+        }
 #else
-	SDL_GetWindowSize(sdlw->window, &effectiveWidth, &effectiveHeight);
+        SDL_GetWindowSize(sdlw->window, &effectiveWidth, &effectiveHeight);
 #endif
-#if defined(SAILFISH_FBO)
-	if( sailfish_fbo.bw > 0 && sailfish_fbo.bw > 0 ) {
-		viddef.width = sailfish_fbo.bw;
-		viddef.height = sailfish_fbo.bh;
-	} else {
-		viddef.width = effectiveWidth;
-		viddef.height = effectiveHeight;	
-	}
+#if defined(ENABLE_TOUCH_OVERLAY)
+        if (R_TouchOverlayShouldRender()) {
+                viddef.width = sailfish_fbo.bw;
+                viddef.height = sailfish_fbo.bh;
+        } else {
+                viddef.width = effectiveWidth;
+                viddef.height = effectiveHeight;
+        }
 #else
-	viddef.width = effectiveWidth;
-	viddef.height = effectiveHeight;
+        viddef.width = effectiveWidth;
+        viddef.height = effectiveHeight;
 #endif
 	sdlwResize(effectiveWidth, effectiveHeight);
     return false;
@@ -4476,9 +4628,9 @@ static bool R_Window_createContext()
 		}
 	}
 
-#ifdef SAILFISH_FBO
-	Cvar_SetValue("r_sizerender", 0.5);
-	create_fbo(viddef.width, viddef.height);
+#if defined(ENABLE_TOUCH_OVERLAY)
+        if (IN_TouchOverlayActive())
+                Cvar_SetValue("r_sizerender", 0.5);
 #endif
 
 	r_msaaAvailable = (eglwContext->configInfoAbilities.samples > 0);
@@ -4491,10 +4643,11 @@ static bool R_Window_createContext()
 		goto on_error;
 
 	R_Gamma_initialize();
-#ifdef SAILFISH_FBO
-	SDL_ShowCursor(1);
+#if defined(ENABLE_TOUCH_OVERLAY)
+        SDL_ShowCursor(IN_TouchOverlayActive() ? 1 : 0);
+        R_TouchOverlayUpdateState();
 #else
-	SDL_ShowCursor(0);
+        SDL_ShowCursor(0);
 #endif
 	return true;
 
@@ -4644,11 +4797,9 @@ static void R_Register()
 	r_nobind = Cvar_Get("r_nobind", "0", 0);
     r_subdivision = Cvar_Get("r_subdivision", "64", CVAR_ARCHIVE);
 
-	r_fullscreenflash = Cvar_Get("r_fullscreenflash", "1", 0);
-	#if defined(SAILFISH_FBO)
-	r_rotaterender = Cvar_Get("r_rotaterender", "0", CVAR_ARCHIVE);
-	r_sizerender = Cvar_Get("r_sizerender", "1", CVAR_ARCHIVE);
-	#endif
+        r_fullscreenflash = Cvar_Get("r_fullscreenflash", "1", 0);
+        r_rotaterender = Cvar_Get("r_rotaterender", "0", CVAR_ARCHIVE);
+        r_sizerender = Cvar_Get("r_sizerender", "1", CVAR_ARCHIVE);
 
 	r_texture_retexturing = Cvar_Get("r_texture_retexturing", "1", CVAR_ARCHIVE);
 	r_texture_filter = Cvar_Get("r_texture_filter", "GL_LINEAR_MIPMAP_LINEAR", CVAR_ARCHIVE);

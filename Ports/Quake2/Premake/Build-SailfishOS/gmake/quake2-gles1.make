@@ -11,6 +11,14 @@ CC = gcc
 CXX = g++
 AR = ar
 
+TOUCH_OVERLAY_DEFINE :=
+ifneq ($(strip $(ENABLE_TOUCH_OVERLAY)),)
+  TOUCH_OVERLAY_DEFINE += -DENABLE_TOUCH_OVERLAY
+endif
+ifneq ($(strip $(QUAKE2_TOUCH_OVERLAY)),)
+  TOUCH_OVERLAY_DEFINE += -DENABLE_TOUCH_OVERLAY
+endif
+
 ifndef RESCOMP
   ifdef WINDRES
     RESCOMP = $(WINDRES)
@@ -23,7 +31,7 @@ ifeq ($(config),release)
   OBJDIR     = ../../../Output/Targets/Linux-x86-32/Release/obj/quake2-gles1
   TARGETDIR  = ../../../Output/Targets/Linux-x86-32/Release/bin
   TARGET     = $(TARGETDIR)/quake2-gles1
-  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP -D_GNU_SOURCE=1 -DEGLW_GLES1
+  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP -D_GNU_SOURCE=1 -DEGLW_GLES1 $(TOUCH_OVERLAY_DEFINE)
   INCLUDES  += -I../../../../../Engine/External/include -I../../../Sources -I../../../../../Engine/Sources/Compatibility -I../../../../../Engine/Sources/Compatibility/OpenGLES/Includes
   ALL_CPPFLAGS  += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS    += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -ffast-math -Wall -Wextra -O2 -std=c99 -Wno-unused-function -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-switch -Wno-missing-field-initializers -fPIC -fvisibility=hidden
@@ -45,7 +53,7 @@ ifeq ($(config),debug)
   OBJDIR     = ../../../Output/Targets/Linux-x86-32/Debug/obj/quake2-gles1
   TARGETDIR  = ../../../Output/Targets/Linux-x86-32/Debug/bin
   TARGET     = $(TARGETDIR)/quake2-gles1
-  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP -D_GNU_SOURCE=1 -DEGLW_GLES1 -DSAILFISHOS
+  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP -D_GNU_SOURCE=1 -DEGLW_GLES1 $(TOUCH_OVERLAY_DEFINE)
   INCLUDES  += -I../../../../../Engine/External/include -I../../../Sources -I../../../../../Engine/Sources/Compatibility -I../../../../../Engine/Sources/Compatibility/OpenGLES/Includes
   ALL_CPPFLAGS  += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS    += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -ffast-math -Wall -Wextra -g -std=c99 -Wno-unused-function -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-switch -Wno-missing-field-initializers -fPIC -fvisibility=hidden

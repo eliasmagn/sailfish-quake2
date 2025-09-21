@@ -1,23 +1,14 @@
 #include "vkb.h"
 
+#include <stdio.h>
 #include <string.h>
+#include <SDL_filesystem.h>
 #include <backends/input.h>
 #include <client/client.h>
 #include <common/shared/shared.h>
 #include <client/keyboard.h>
 
-//#undef _HARMATTAN_RESC // for testing
-#ifdef _HARMATTAN_RESC
-#define RESC _HARMATTAN_RESC
-#else
-# if !defined(RESC)
-#  ifdef SAILFISHOS // TODO - this for tests only, better compile png to res file
-#   define RESC "/home/nemo/Projects/quake2/res/"
-#  else
-#   define RESC "res/"
-#  endif
-# endif
-#endif
+#define VKB_RESOURCE_DIRECTORY "res"
 
 #define VB_S(n) (n * VB_SPACING)
 #define VB_W(n) (n * VB_WIDTH)
@@ -159,13 +150,43 @@ static const char *Cmd_Strs[Total_Cmd - God_Cmd] = {
 	"version"
 };
 
-const char *Tex_Files[VKB_TEX_COUNT] = {
-	RESC"anna_buttons.png",
-	RESC"circle_joystick.png",
-	RESC"A-Z_u.png",
-	RESC"0-9.png",
-	RESC"a-z_l.png"
+static const char *const vkbTextureNames[VKB_TEX_COUNT] = {
+        "anna_buttons.png",
+        "circle_joystick.png",
+        "A-Z_u.png",
+        "0-9.png",
+        "a-z_l.png"
 };
+
+static char vkbTexturePaths[VKB_TEX_COUNT][MAX_OSPATH];
+const char *Tex_Files[VKB_TEX_COUNT] = { NULL };
+
+void vkb_EnsureTexturePaths(void)
+{
+        static qboolean initialized = false;
+        if (initialized)
+                return;
+        initialized = true;
+
+        char *basePath = SDL_GetBasePath();
+        const char *base = basePath ? basePath : "";
+        const char *separator = "";
+        if (base[0] != '\0')
+        {
+                size_t len = strlen(base);
+                if (len > 0 && base[len - 1] != '/' && base[len - 1] != '\\')
+                        separator = "/";
+        }
+
+        for (int i = 0; i < VKB_TEX_COUNT; ++i)
+        {
+                snprintf(vkbTexturePaths[i], sizeof(vkbTexturePaths[i]), "%s%s%s/%s", base, separator, VKB_RESOURCE_DIRECTORY, vkbTextureNames[i]);
+                Tex_Files[i] = vkbTexturePaths[i];
+        }
+
+        if (basePath)
+                SDL_free(basePath);
+}
 
 struct vkb_cursor VKB_Cursor[CURSOR_COUNT] = {
 	{VB_S(0) + VB_W(6), VB_S(2), VB_W(2) + VB_S(1), 

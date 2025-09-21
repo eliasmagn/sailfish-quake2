@@ -330,6 +330,7 @@ extern struct vkb_cursor VKB_Cursor[CURSOR_COUNT];
 extern unsigned VKB_States[Client_In_Invalid];
 extern boolean render_lock;
 
+void vkb_EnsureTexturePaths(void);
 float vkb_FormatAngle(float angle);
 void vkb_SetKeyBindinds(char ** kbs);
 void vkb_SetClientState(unsigned state);

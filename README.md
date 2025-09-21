@@ -53,3 +53,7 @@ sfdk engine exec sb2 -t SailfishOS-4.0.1.48-i486 -R -m sdk-install zypper in -y 
 # and build ч86 version of Quake2 
 sfdk engine exec sb2 -t SailfishOS-4.0.1.48-i486 rpmbuild --define "_topdir `pwd`/build_rpm" --define "_arch i486" -ba spec/quake2.spec
 ```
+
+## Touch overlay
+
+Quake II still defaults to mouse and keyboard input on every platform. The SDL backend includes an optional touch overlay that can be compiled for any SDL2 toolchain. Set `ENABLE_TOUCH_OVERLAY=1` (or `QUAKE2_TOUCH_OVERLAY=1`) when invoking the generated Makefiles to add the `-DENABLE_TOUCH_OVERLAY` build flag. At runtime use the `in_touch_overlay` console variable or export `QUAKE2_TOUCH_OVERLAY=1` before launching the game to enable the overlay. Overlay assets are loaded from the portable `res/` directory next to the executable.

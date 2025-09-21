@@ -1317,12 +1317,13 @@ void vkb_NewGLVKB(float x, float y, float z, float w, float h)
 	the_vkb.z = z;
 	the_vkb.width = w;
 	the_vkb.height = h;
-	vkb_UpdateP(w, h);
-	
-	int k;
-	for(k = 0; k < VKB_TEX_COUNT; k++) {
-		the_vkb.tex[k] = vkb_NewTexture2D(Tex_Files[k]);
-	}
+        vkb_UpdateP(w, h);
+
+        int k;
+        vkb_EnsureTexturePaths();
+        for(k = 0; k < VKB_TEX_COUNT; k++) {
+                the_vkb.tex[k] = vkb_NewTexture2D(Tex_Files[k]);
+        }
 
 	int i;
 	int j = 0;

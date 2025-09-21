@@ -43,12 +43,13 @@ static int l_mouseOldX, l_mouseOldY;
 static SDL_Joystick *l_joystick = NULL;
 static SDL_GameController *l_controller = NULL;
 
+#ifdef ENABLE_TOUCH_OVERLAY
 struct _TouchFinger {
-	SDL_TouchID  touch_id;
-	SDL_FingerID finger_id;
-	float press_x;
-	float press_y;
-	float x;
+        SDL_TouchID  touch_id;
+        SDL_FingerID finger_id;
+        float press_x;
+        float press_y;
+        float x;
 	float y;
 	float dx;
 	float dy;
@@ -59,8 +60,8 @@ struct _TouchFinger {
 typedef struct _TouchFinger TouchFinger;
 
 struct _ScreenRect {
-	int x, y;
-	int w, h;
+        int x, y;
+        int w, h;
 };
 typedef struct _ScreenRect ScreenRect;
 
@@ -77,20 +78,14 @@ static TouchFinger fingers[5] = {
 };
 
 static ScreenRect sr_mouse_look = {
-	0,0,0,0
+        0,0,0,0
 };
 
 static ScreenRect sr_joystick = {
-	0,0,0,0
+        0,0,0,0
 };
-
-bool IN_TouchOverlayActive(void)
-{
-        return in_touch_overlay && in_touch_overlay->value != 0.0f;
-}
-
 bool is_PointInRect( float x, float y, ScreenRect *sr) {
-	return sr->x <= (int)x && sr->y <= (int)y && sr->x + sr->w >= (int)x && sr->y + sr->h >= (int)y;
+        return sr->x <= (int)x && sr->y <= (int)y && sr->x + sr->w >= (int)x && sr->y + sr->h >= (int)y;
 }
 // transform delta to FBO orientaton
 void transformDelta( float *dx, float *dy ) {
@@ -139,9 +134,20 @@ void transformTouch( float *x, float *y ) {
 	sr_mouse_look.h = h;
 
 	sr_joystick.x = 0;
-	sr_joystick.y = 0;
-	sr_joystick.w = half_width;
-	sr_joystick.h = h;
+        sr_joystick.y = 0;
+        sr_joystick.w = half_width;
+        sr_joystick.h = h;
+}
+
+#endif // ENABLE_TOUCH_OVERLAY
+
+bool IN_TouchOverlayActive(void)
+{
+#ifdef ENABLE_TOUCH_OVERLAY
+        return in_touch_overlay && in_touch_overlay->value != 0.0f;
+#else
+        return false;
+#endif
 }
 
 // convert joy sholder to mouse button
@@ -430,12 +436,12 @@ bool IN_processEvent(SDL_Event *event)
 			break;
 		}
 		break;
-#if defined(SAILFISHOS) && defined(SAILFISH_FBO)
+#if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISH_FBO)
     case SDL_DISPLAYEVENT:
         if( event->display.event == SDL_DISPLAYEVENT_ORIENTATION ) {
-			// skip non landscape orinetations 
-			if( event->display.data1 == SDL_ORIENTATION_LANDSCAPE 
-			    || event->display.data1 == SDL_ORIENTATION_LANDSCAPE_FLIPPED ) 
+                        // skip non landscape orinetations
+                        if( event->display.data1 == SDL_ORIENTATION_LANDSCAPE
+                            || event->display.data1 == SDL_ORIENTATION_LANDSCAPE_FLIPPED )
 			{
 				sdlwSetRealOrientation((SDL_DisplayOrientation)event->display.data1);
 				#ifdef SAILFISH_FBO
@@ -484,8 +490,10 @@ bool IN_processEvent(SDL_Event *event)
             if (key >= 0) {
                 Key_Event(key, (event->type == SDL_MOUSEBUTTONDOWN));
                 if (IN_TouchOverlayActive()) {
+#ifdef ENABLE_TOUCH_OVERLAY
 #ifdef SAILFISH_FBO
                                 vkb_GLVKBMouseEvent(key, (event->type == SDL_MOUSEBUTTONDOWN) ? btrue : bfalse, event->button.x * sdlwGetFboScale(), event->button.y * sdlwGetFboScale(),  vkb_HandleVKBAction);
+#endif
 #endif
                 }
                         }
@@ -498,12 +506,12 @@ bool IN_processEvent(SDL_Event *event)
                         l_mouseY += event->motion.yrel;
                 }
                 break;
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
         case SDL_FINGERDOWN:
                 if (!IN_TouchOverlayActive())
                         break;
                 {
-			//int touch_count = 0;
+                        //int touch_count = 0;
 			transformTouch(&event->tfinger.x, &event->tfinger.y);
 			for(int i = 0; i < MAX_FINGER; i++) {
 				if (fingers[i].finger_id == event->tfinger.fingerId && fingers[i].touch_id == event->tfinger.touchId) 
@@ -557,8 +565,8 @@ bool IN_processEvent(SDL_Event *event)
 					fingers[i].wait_double_tap = false; 
 				}
 			}
-        }
-		break;
+                }
+                break;
         case SDL_FINGERMOTION:
                 if (!IN_TouchOverlayActive())
                         break;
@@ -577,9 +585,9 @@ bool IN_processEvent(SDL_Event *event)
 					break;
 				}
 			}
-		}
-		break;
-#endif // SAILFISHOS
+                }
+                break;
+#endif // ENABLE_TOUCH_OVERLAY
 #if !defined(__GCW_ZERO__)
 	case SDL_TEXTINPUT:
 		Char_Event(event->text.text[0], false);
@@ -609,8 +617,10 @@ bool IN_processEvent(SDL_Event *event)
 		*/
 		int key = -1;
 		bool down = avalue >= 0.25;
-		char cmd[1024];
-		// joy_shoulder_to_mouse_button
+                // joy_shoulder_to_mouse_button
+#ifdef ENABLE_TOUCH_OVERLAY
+                char cmd[1024];
+#endif
 		switch( event->jaxis.axis ) {
                         case 4:
                                 // key = K_GAMEPAD_L;
@@ -619,12 +629,14 @@ bool IN_processEvent(SDL_Event *event)
                                 // key = K_MOUSE2;
                                 joy_shoulder_to_mouse_button[1] = down;
                                 if (IN_TouchOverlayActive()) {
+#ifdef ENABLE_TOUCH_OVERLAY
                                         if( down ) {
                                                 Com_sprintf (cmd, sizeof(cmd), "+%s %i %i\n", "speed", K_LAST, Sys_Milliseconds());
                                         } else {
                                                 Com_sprintf (cmd, sizeof(cmd), "-%s %i %i\n", "speed", K_LAST, Sys_Milliseconds());
                                         }
                                         vkb_AddCommand(cmd);
+#endif
                                 }
                                 break;
 			case 5: 
@@ -673,87 +685,142 @@ bool IN_processEvent(SDL_Event *event)
 		int key = K_JOY1 + event->jbutton.button;
 		// int vkb_state = vkb_GetClientState();
 		// int in_game = vkb_state & VKB_In_Game;
-		char cmd[1024];
-		cmd[0] = '\0';
-		bool overlay_active = IN_TouchOverlayActive();
+                char cmd[1024];
+#ifdef ENABLE_TOUCH_OVERLAY
+                cmd[0] = '\0';
+#endif
+                bool overlay_active = IN_TouchOverlayActive();
+#ifndef ENABLE_TOUCH_OVERLAY
+                (void)cmd;
+                (void)overlay_active;
+#endif
 
 		switch( event->jbutton.button ) {
-			case SDL_CONTROLLER_BUTTON_DPAD_UP:
-				if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
-					if( down )
-						Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invdrop", K_LAST, Sys_Milliseconds());
-				} else
-					key = K_GAMEPAD_UP; 
-				break;
-			case 12: // DOWN
-				if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
-					if( down )
-						Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invuse", K_LAST, Sys_Milliseconds());
-				} else
-					key = K_GAMEPAD_DOWN; 
-				break;
-			case 13: // LEFT
-				if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
-					if( down )
-						Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invprev", K_LAST, Sys_Milliseconds());
-				} else 
-					key = K_GAMEPAD_LEFT;
-				break;
-			case 14: // RIGHT
-				if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
-					if( down )
-						Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invnext", K_LAST, Sys_Milliseconds());
-				} else 
-					key = K_GAMEPAD_RIGHT;
-				break;
+                        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+#ifdef ENABLE_TOUCH_OVERLAY
+                                if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
+                                        if( down )
+                                                Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invdrop", K_LAST, Sys_Milliseconds());
+                                } else
+#endif
+                                        key = K_GAMEPAD_UP;
+                                break;
+                        case 12: // DOWN
+                                if( overlay_active &&
+#ifdef ENABLE_TOUCH_OVERLAY
+                                   vkb_GetClientState() == Client_In_Game
+#else
+                                   false
+#endif
+                                ) {
+#ifdef ENABLE_TOUCH_OVERLAY
+                                        if( down )
+                                                Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invuse", K_LAST, Sys_Milliseconds());
+#endif
+                                } else
+                                        key = K_GAMEPAD_DOWN;
+                                break;
+                        case 13: // LEFT
+                                if( overlay_active &&
+#ifdef ENABLE_TOUCH_OVERLAY
+                                   vkb_GetClientState() == Client_In_Game
+#else
+                                   false
+#endif
+                                ) {
+#ifdef ENABLE_TOUCH_OVERLAY
+                                        if( down )
+                                                Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invprev", K_LAST, Sys_Milliseconds());
+#endif
+                                } else
+                                        key = K_GAMEPAD_LEFT;
+                                break;
+                        case 14: // RIGHT
+                                if( overlay_active &&
+#ifdef ENABLE_TOUCH_OVERLAY
+                                   vkb_GetClientState() == Client_In_Game
+#else
+                                   false
+#endif
+                                ) {
+#ifdef ENABLE_TOUCH_OVERLAY
+                                        if( down )
+                                                Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invnext", K_LAST, Sys_Milliseconds());
+#endif
+                                } else
+                                        key = K_GAMEPAD_RIGHT;
+                                break;
 			case SDL_CONTROLLER_BUTTON_START: {// start
 				key = K_GAMEPAD_SELECT;
 				// if( down )
 					// Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "invnext", K_LAST, Sys_Milliseconds());
 				break;
 			}
-			case 4: {// select
- 				// key = K_GAMEPAD_START; 
-				if( overlay_active && down )
-					Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "cmd help", K_LAST, Sys_Milliseconds());
-				break;
-			}
-			case SDL_CONTROLLER_BUTTON_A: { // cross
-				if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
-					if( down ) {
-						Com_sprintf (cmd, sizeof(cmd), "+%s %i %i\n", "moveup", K_LAST, Sys_Milliseconds());
-					} else if( overlay_active ) {
-						Com_sprintf (cmd, sizeof(cmd), "-%s %i %i\n", "moveup", K_LAST, Sys_Milliseconds());
-					}
-				}
-				break;
-			}
-			case SDL_CONTROLLER_BUTTON_X: // square
-			case SDL_CONTROLLER_BUTTON_RIGHTSTICK: {
-				if( overlay_active && down ) {
-					Com_sprintf (cmd, sizeof(cmd), "+%s %i %i\n", "movedown", K_LAST, Sys_Milliseconds());
-				} else if( overlay_active ) {
-					Com_sprintf (cmd, sizeof(cmd), "-%s %i %i\n", "movedown", K_LAST, Sys_Milliseconds());
-				}
-				break;
-			}
-			case 9: {
-				if( overlay_active && down )
-					Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "weapprev", K_LAST, Sys_Milliseconds());
-				break;
-			}
-			case 10: {
-				if( overlay_active && down )
-					Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "weapnext", K_LAST, Sys_Milliseconds());
-				break;
-			}
-		}
-		if( cmd[0] == '\0' || !overlay_active )
-			Key_Event(key, down);
-		else
-			vkb_AddCommand(cmd);
-	}
-	break;
+                        case 4: {// select
+#ifdef ENABLE_TOUCH_OVERLAY
+                                if( overlay_active && down )
+                                        Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "cmd help", K_LAST, Sys_Milliseconds());
+#endif
+                                break;
+                        }
+                        case SDL_CONTROLLER_BUTTON_A: { // cross
+                                if( overlay_active &&
+#ifdef ENABLE_TOUCH_OVERLAY
+                                    vkb_GetClientState() == Client_In_Game
+#else
+                                    false
+#endif
+                                ) {
+#ifdef ENABLE_TOUCH_OVERLAY
+                                        if( down ) {
+                                                Com_sprintf (cmd, sizeof(cmd), "+%s %i %i\n", "moveup", K_LAST, Sys_Milliseconds());
+                                        } else if( overlay_active ) {
+                                                Com_sprintf (cmd, sizeof(cmd), "-%s %i %i\n", "moveup", K_LAST, Sys_Milliseconds());
+                                        }
+#endif
+                                }
+                                break;
+                        }
+                        case SDL_CONTROLLER_BUTTON_X: // square
+                        case SDL_CONTROLLER_BUTTON_RIGHTSTICK: {
+                                if( overlay_active) {
+#ifdef ENABLE_TOUCH_OVERLAY
+                                        if( down ) {
+                                                Com_sprintf (cmd, sizeof(cmd), "+%s %i %i\n", "movedown", K_LAST, Sys_Milliseconds());
+                                        } else {
+                                                Com_sprintf (cmd, sizeof(cmd), "-%s %i %i\n", "movedown", K_LAST, Sys_Milliseconds());
+                                        }
+#endif
+                                }
+                                break;
+                        }
+                        case 9: {
+                                if( overlay_active && down )
+#ifdef ENABLE_TOUCH_OVERLAY
+                                        Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "weapprev", K_LAST, Sys_Milliseconds());
+#endif
+                                break;
+                        }
+                        case 10: {
+                                if( overlay_active && down )
+#ifdef ENABLE_TOUCH_OVERLAY
+                                        Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "weapnext", K_LAST, Sys_Milliseconds());
+#endif
+                                break;
+                        }
+                }
+                if(
+#ifdef ENABLE_TOUCH_OVERLAY
+                        cmd[0] == '\0' ||
+#endif
+                        !overlay_active )
+                        Key_Event(key, down);
+#ifdef ENABLE_TOUCH_OVERLAY
+                else
+                        vkb_AddCommand(cmd);
+#endif
+        }
+        break;
 	case SDL_JOYHATMOTION:
 	{
 		if (l_controller)
@@ -849,9 +916,15 @@ bool IN_processEvent(SDL_Event *event)
 	{
 		bool down = (event->type == SDL_CONTROLLERBUTTONDOWN);
 		int key = -1;
-		char cmd[1024];
-		cmd[0] = '\0';
-		bool overlay_active = IN_TouchOverlayActive();
+                char cmd[1024];
+#ifdef ENABLE_TOUCH_OVERLAY
+                cmd[0] = '\0';
+#endif
+                bool overlay_active = IN_TouchOverlayActive();
+#ifndef ENABLE_TOUCH_OVERLAY
+                (void)cmd;
+                (void)overlay_active;
+#endif
 		switch (event->cbutton.button)
 		{
 		case SDL_CONTROLLER_BUTTON_A:
@@ -884,14 +957,17 @@ bool IN_processEvent(SDL_Event *event)
 		case SDL_CONTROLLER_BUTTON_LEFTSTICK: 
 			key = K_JOY1; 
 			break;
-		case SDL_CONTROLLER_BUTTON_BACK:
-		case SDL_CONTROLLER_BUTTON_GUIDE: 
-			if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
-				if( down )
-					Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "cmd help", K_LAST, Sys_Milliseconds());
-			} else {
-				key = K_GAMEPAD_SELECT;
-			}
+                case SDL_CONTROLLER_BUTTON_BACK:
+                case SDL_CONTROLLER_BUTTON_GUIDE:
+#ifdef ENABLE_TOUCH_OVERLAY
+                        if( overlay_active && vkb_GetClientState() == Client_In_Game ) {
+                                if( down )
+                                        Com_sprintf (cmd, sizeof(cmd), "%s %i %i\n", "cmd help", K_LAST, Sys_Milliseconds());
+                        } else
+#endif
+                        {
+                                key = K_GAMEPAD_SELECT;
+                        }
 		break;
 		case SDL_CONTROLLER_BUTTON_START: 
 			// key = K_GAMEPAD_START; 
@@ -942,10 +1018,14 @@ bool IN_processEvent(SDL_Event *event)
 				event->cbutton.button);
 			break;
 		}
-		if (key >= 0)
-			Key_Event(key, down);
-		else if( overlay_active && cmd[0] != '\0' )
-			vkb_AddCommand(cmd);
+                if (key >= 0) {
+                        Key_Event(key, down);
+                }
+#ifdef ENABLE_TOUCH_OVERLAY
+                else if( overlay_active && cmd[0] != '\0' ) {
+                        vkb_AddCommand(cmd);
+                }
+#endif
 	}
 	break;
 	}
@@ -1078,7 +1158,7 @@ void IN_Move(usercmd_t *cmd)
         cmd->forwardmove += cl_speed_forward->value * joyY * running;
     }
 
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
         if (IN_TouchOverlayActive()) {
                 for(int i = 0; i < MAX_FINGER; i++ ) {
                         if( fingers[i].pressed ) {

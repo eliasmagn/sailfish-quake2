@@ -4,7 +4,7 @@
 
 #include "OpenGLES/EGLWrapper.h"
 
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
 #include "SDL/SDLWrapper.h"
 #include <SDL.h>
 #endif
@@ -762,16 +762,16 @@ static void MenuGraphics_rotaterender_apply()
 {
 	menulist_s *list = &MenuGraphics_rotaterender_list;
 	Cvar_SetValue("r_rotaterender", list->curvalue);
-#ifdef SAILFISHOS
-	if( (int)(list->curvalue) == 1 ) {
-		if( sdlwGetRealOrientation() == SDL_ORIENTATION_LANDSCAPE_FLIPPED )
-			sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE);
-		else if( sdlwGetRealOrientation() == SDL_ORIENTATION_LANDSCAPE )
-			sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE_FLIPPED);
-	}
-	else {
-		sdlwSetOrientation(sdlwGetRealOrientation());
-	}
+#ifdef ENABLE_TOUCH_OVERLAY
+        if( (int)(list->curvalue) == 1 ) {
+                if( sdlwGetRealOrientation() == SDL_ORIENTATION_LANDSCAPE_FLIPPED )
+                        sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE);
+                else if( sdlwGetRealOrientation() == SDL_ORIENTATION_LANDSCAPE )
+                        sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE_FLIPPED);
+        }
+        else {
+                sdlwSetOrientation(sdlwGetRealOrientation());
+        }
 #endif
 }
 
@@ -816,7 +816,7 @@ static void MenuGraphics_sizerender_apply()
 {
 	menulist_s *list = &MenuGraphics_sizerender_list;
 	Cvar_SetValue("r_sizerender", list->curvalue);
-// #ifdef SAILFISHOS
+// #ifdef ENABLE_TOUCH_OVERLAY
 // 	if( (int)(list->curvalue) == 1 ) {
 // 		if( sdlwGetRealOrientation() == SDL_ORIENTATION_LANDSCAPE_FLIPPED )
 // 			sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE);

@@ -2,16 +2,47 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+#include <SDL_filesystem.h>
 
 SdlwContext *sdlwContext = NULL;
 
-#ifdef SAILFISHOS
-#include <SDL_hints.h>
-#include <SDL_events.h>
-#include <SDL_video.h>
-#include <SDL_syswm.h>
-#include <wayland-client-protocol.h>
-#endif
+#define SDLW_MAX_PATH 1024
+
+static void sdlwTryLoadControllerMappings(void)
+{
+    static int attempted = 0;
+    if (attempted)
+        return;
+    attempted = 1;
+
+    const char *relativePath = "res/gamecontrollerdb.txt";
+    char *basePath = SDL_GetBasePath();
+    if (basePath != NULL)
+    {
+        const size_t baseLength = strlen(basePath);
+        const char *separator = "";
+        if (baseLength > 0 && basePath[baseLength - 1] != '/' && basePath[baseLength - 1] != '\\')
+            separator = "/";
+
+        char mappingPath[SDLW_MAX_PATH];
+        mappingPath[0] = '\0';
+        snprintf(mappingPath, sizeof(mappingPath), "%s%s%s", basePath, separator, relativePath);
+        const int result = SDL_GameControllerAddMappingsFromFile(mappingPath);
+        if (result >= 0)
+        {
+            printf("Load gamecontrollerdb : %i (%s)\n", result, mappingPath);
+            SDL_free(basePath);
+            return;
+        }
+        SDL_free(basePath);
+    }
+
+    const int fallback = SDL_GameControllerAddMappingsFromFile(relativePath);
+    if (fallback >= 0)
+        printf("Load gamecontrollerdb : %i (%s)\n", fallback, relativePath);
+}
 //SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER
 
 static void sdlwLogOutputFunction(void *userdata, int category, SDL_LogPriority priority, const char *message)
@@ -92,8 +123,9 @@ bool sdlwInitialize(SdlProcessEventFunction processEvent, Uint32 flags) {
     sdlw->window = NULL;
     sdlw->windowWidth = 0;
     sdlw->windowHeight = 0;
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
     sdlw->orientation = SDL_ORIENTATION_LANDSCAPE;
+    sdlw->real_orientation = SDL_ORIENTATION_LANDSCAPE;
 #endif
     if (SDL_Init(flags) < 0) {
         printf("Unable to initialize SDL: %s\n", SDL_GetError());
@@ -124,14 +156,11 @@ void sdlwFinalize() {
 bool sdlwCreateWindow(const char *windowName, int windowWidth, int windowHeight, Uint32 flags)
 {
     SdlwContext *sdlw = sdlwContext;
-    if (sdlw == NULL) 
+    if (sdlw == NULL)
         return true;
-    #ifdef SAILFISHOS
-    int r = SDL_GameControllerAddMappingsFromFile("/usr/share/ru.sashikknox.quake2/gamecontrollerdb.txt");
-    printf("Load gamecontrollerdb : %i\n", r);
-    #endif
+    sdlwTryLoadControllerMappings();
     sdlwDestroyWindow();
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
     windowWidth = -1;
 #endif
     if (windowWidth < 0 || windowHeight < 0)
@@ -142,7 +171,7 @@ bool sdlwCreateWindow(const char *windowName, int windowWidth, int windowHeight,
             printf("SDL_GetDesktopDisplayMode failed: %s", SDL_GetError());
             goto on_error;
         }
-        #if defined(__RASPBERRY_PI__) || defined(__GCW_ZERO__) || defined(SAILFISHOS)
+        #if defined(__RASPBERRY_PI__) || defined(__GCW_ZERO__) || defined(ENABLE_TOUCH_OVERLAY)
         // Windowed mode does not work on these platforms. So use full screen.
         windowWidth = dm.w;
         windowHeight = dm.h;
@@ -154,17 +183,17 @@ bool sdlwCreateWindow(const char *windowName, int windowWidth, int windowHeight,
     sdlw->windowWidth = windowWidth;
     sdlw->windowHeight = windowHeight;
     int windowPos = SDL_WINDOWPOS_CENTERED;
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
     SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+        SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 8);
+        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     windowPos = SDL_WINDOWPOS_UNDEFINED;
     flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN;
 #endif
-   	if ((sdlw->window=SDL_CreateWindow(windowName, windowPos, windowPos, windowWidth, windowHeight, flags))==NULL) goto on_error;
-#ifdef SAILFISHOS
+        if ((sdlw->window=SDL_CreateWindow(windowName, windowPos, windowPos, windowWidth, windowHeight, flags))==NULL) goto on_error;
+#ifdef ENABLE_TOUCH_OVERLAY
     sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE); // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"landscape");
 #endif
     return false;
@@ -260,7 +289,7 @@ void sdlwCheckEvents() {
 	}
 }
 
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
 SDL_DisplayOrientation sdlwCurrentOrientation() {
     SdlwContext *sdlw = sdlwContext;
     if (sdlw == NULL) return SDL_ORIENTATION_UNKNOWN;
@@ -277,60 +306,6 @@ void sdlwSetOrientation(SDL_DisplayOrientation orientation) {
     SdlwContext *sdlw = sdlwContext;
     if (sdlw == NULL) return;
     sdlw->orientation = orientation;
-
-    struct SDL_SysWMinfo wmInfo;
-    SDL_VERSION(&wmInfo.version);
-    if (!SDL_GetWindowWMInfo(sdlwContext->window, &wmInfo)) {
-        printf("Cannot get the window handle.\n");
-        // goto on_error;
-        switch (sdlw->orientation) {
-            case SDL_ORIENTATION_LANDSCAPE:
-                SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"landscape");
-                break;
-            case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
-                SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"inverted-landscape");
-                break;
-            case SDL_ORIENTATION_PORTRAIT:
-                SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"portrait");
-                break;
-            case SDL_ORIENTATION_PORTRAIT_FLIPPED:
-                SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"inverted-portrait");
-                break;
-            default:
-            case SDL_ORIENTATION_UNKNOWN:
-                SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"landscape");
-                // printf("SDL_DisplayOrientation is SDL_ORIENTATION_UNKNOWN\n");
-                break;
-        }
-    }
-    // nativeDisplay = wmInfo.info.wl.display;
-    // wl_surface *sdl_wl_surface = wmInfo.info.wl.surface;
-
-    // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"landscape");
-    switch (sdlw->orientation) {
-        case SDL_ORIENTATION_LANDSCAPE:
-            // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"landscape");
-            wl_surface_set_buffer_transform(wmInfo.info.wl.surface, WL_OUTPUT_TRANSFORM_270);
-            break;
-        case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
-            // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"inverted-landscape");
-            wl_surface_set_buffer_transform(wmInfo.info.wl.surface, WL_OUTPUT_TRANSFORM_90);
-            break;
-        case SDL_ORIENTATION_PORTRAIT:
-            // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"portrait");
-            wl_surface_set_buffer_transform(wmInfo.info.wl.surface, WL_OUTPUT_TRANSFORM_NORMAL);
-            break;
-        case SDL_ORIENTATION_PORTRAIT_FLIPPED:
-            // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"inverted-portrait");
-            wl_surface_set_buffer_transform(wmInfo.info.wl.surface, WL_OUTPUT_TRANSFORM_180);
-            break;
-        default:
-        case SDL_ORIENTATION_UNKNOWN:
-            // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"landscape");
-            wl_surface_set_buffer_transform(wmInfo.info.wl.surface, WL_OUTPUT_TRANSFORM_90);
-            // printf("SDL_DisplayOrientation is SDL_ORIENTATION_UNKNOWN\n");
-            break;
-    }
 }
 
 void sdlwSetRealOrientation(SDL_DisplayOrientation orientation) {
@@ -363,7 +338,7 @@ void sdlwSetFboScale(float scale) {
 void sdlwGetWindowSize(int *w, int *h) {
     SdlwContext *sdlw = sdlwContext;
     if (sdlw == NULL) return; 
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
     switch (sdlw->orientation) {
         case SDL_ORIENTATION_PORTRAIT:
         case SDL_ORIENTATION_PORTRAIT_FLIPPED:

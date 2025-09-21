@@ -256,11 +256,7 @@ static void R_TouchOverlayFetchNativeSize(int *width, int *height)
         SdlwContext *sdlw = sdlwContext;
         if (sdlw && sdlw->window)
         {
-#if defined(SAILFISHOS)
-                SDL_GetWindowSize(sdlw->window, &native_height, &native_width);
-#else
-                SDL_GetWindowSize(sdlw->window, &native_width, &native_height);
-#endif
+                sdlwGetWindowSize(&native_width, &native_height);
         }
 
         *width = native_width;
@@ -3535,7 +3531,7 @@ static void R_Gamma_calculateRamp(float gamma, Uint16 * ramp, int len)
 // Sets the hardware gamma
 static void R_Gamma_update()
 {
-	#if defined(HARDWARE_GAMMA_ENABLED) && !defined(SAILFISHOS)
+   #if defined(HARDWARE_GAMMA_ENABLED) && !defined(ENABLE_TOUCH_OVERLAY)
 	float gamma = (r_gamma->value);
 
 	Uint16 ramp[256];
@@ -3714,18 +3710,26 @@ void draw_fbo_quad() {
 	// than we draw result frame on screen
 	( glBindFramebuffer(GL_FRAMEBUFFER, 0) ); // this return glError! is this normal?
 	glGetError();
-	GLuint shader_index = 0;
-#ifdef SAILFISHOS
-	if( sdlwCurrentOrientation() == SDL_ORIENTATION_LANDSCAPE_FLIPPED )
-		shader_index = 1;
-	GL_CHECK( glViewport(0,0,sailfish_fbo.vh,sailfish_fbo.vw) );
-#else 
-	GL_CHECK( glViewport(0,0,sailfish_fbo.vw,sailfish_fbo.vh) );
+        GLuint shader_index = 0;
+#ifdef ENABLE_TOUCH_OVERLAY
+        bool viewport_rotated = false;
+        if (sdlwCurrentOrientation() == SDL_ORIENTATION_LANDSCAPE_FLIPPED)
+        {
+                shader_index = 1;
+                viewport_rotated = true;
+        }
+        if (r_rotaterender->value == 1)
+        {
+                shader_index = 1 - shader_index;
+                viewport_rotated = !viewport_rotated;
+        }
+        if (viewport_rotated)
+                GL_CHECK( glViewport(0,0,sailfish_fbo.vh,sailfish_fbo.vw) );
+        else
+                GL_CHECK( glViewport(0,0,sailfish_fbo.vw,sailfish_fbo.vh) );
+#else
+        GL_CHECK( glViewport(0,0,sailfish_fbo.vw,sailfish_fbo.vh) );
 #endif
-#if defined(ENABLE_TOUCH_OVERLAY) && !defined(SAILFISHOS)
-	if( r_rotaterender->value == 1)
-		shader_index = 1 - shader_index;
-#endif 
 	GL_CHECK( glUseProgram(sailfish_fbo.quad_programID[shader_index]) );
 	// GL_CHECK( glBindVertexArray(sailfish_fbo.quad_VertexArrayID) );
 	GL_CHECK( glBindBuffer(GL_ARRAY_BUFFER, sailfish_fbo.quad_vertexbuffer) );
@@ -3812,10 +3816,10 @@ void create_fbo_quad() {
 		"void main()\n"
 		"{\n"
 		"  gl_Position = vec4(a_position.xy, 0.0, 1.0);\n"
-#ifdef SAILFISHOS
-		"  v_texcoord = a_texcoord.yx;\n"
+#ifdef ENABLE_TOUCH_OVERLAY
+                "  v_texcoord = a_texcoord.yx;\n"
 #else
-		"  v_texcoord = vec2(a_texcoord.x,1.0 - a_texcoord.y);\n"
+                "  v_texcoord = vec2(a_texcoord.x,1.0 - a_texcoord.y);\n"
 #endif
 		"}\n";
 
@@ -3833,10 +3837,10 @@ void create_fbo_quad() {
 		"void main()\n"
 		"{\n"
 		"  gl_Position = vec4(a_position.xy, 0.0, 1.0);\n"
-#ifdef SAILFISHOS
-		"  v_texcoord = vec2(1.0 - a_texcoord.y, 1.0 - a_texcoord.x);\n"
+#ifdef ENABLE_TOUCH_OVERLAY
+                "  v_texcoord = vec2(1.0 - a_texcoord.y, 1.0 - a_texcoord.x);\n"
 #else
-		"  v_texcoord = vec2(1.0 - a_texcoord.x, a_texcoord.y);\n"
+                "  v_texcoord = vec2(1.0 - a_texcoord.x, a_texcoord.y);\n"
 #endif
 		"}\n";
 		// Create and compile our GLSL program from the shaders
@@ -4328,7 +4332,7 @@ static void R_Window_getValidWindowSize(int maxWindowWidth, int maxWindowHeight,
         requestedWidth = R_WIDTH_MIN;
     if (requestedHeight < R_HEIGHT_MIN)
         requestedHeight = R_HEIGHT_MIN;
-#if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
+#if defined(ENABLE_TOUCH_OVERLAY)
     if (IN_TouchOverlayActive())
     {
         requestedHeight = maxWindowWidth;
@@ -4389,7 +4393,7 @@ static bool R_Window_update(bool forceFlag)
 
         #if defined(R_WINDOWED_MODE_DISABLED)
         bool fullscreen = true;
-        #elif defined(SAILFISHOS) && defined(ENABLE_TOUCH_OVERLAY)
+        #elif defined(ENABLE_TOUCH_OVERLAY)
         bool fullscreen = IN_TouchOverlayActive() ? true : r_fullscreen->value;
         #else
         bool fullscreen = r_fullscreen->value;
@@ -4410,7 +4414,7 @@ static bool R_Window_update(bool forceFlag)
             if (fullscreen)
 				flags |= SDL_WINDOW_FULLSCREEN;
 			#endif
-                        #if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
+                        #if defined(ENABLE_TOUCH_OVERLAY)
                                 if (IN_TouchOverlayActive())
                                 {
                                         creationWidth = windowHeight;
@@ -4424,9 +4428,9 @@ static bool R_Window_update(bool forceFlag)
 				#if defined(__RASPBERRY_PI__)
 				r_window_width->modified = false;
 				r_window_height->modified = false;
-				#elif defined(SAILFISHOS)
-				r_window_width->modified = false;
-				r_window_height->modified = false;
+                                #elif defined(ENABLE_TOUCH_OVERLAY)
+                                r_window_width->modified = false;
+                                r_window_height->modified = false;
 				#else
                 updateNeeded = true;
                 #endif
@@ -4475,18 +4479,16 @@ static bool R_Window_update(bool forceFlag)
             if (!currentFullscreen)
             {
                 int currentWidth, currentHeight;
-                        #if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
-                                if (IN_TouchOverlayActive())
-                                {
-                                        SDL_GetWindowSize(sdlw->window, &currentHeight, &currentWidth);
-                                }
-                                else
-                                {
-                                        SDL_GetWindowSize(sdlw->window, &currentWidth, &currentHeight);
-                                }
-                        #else
-                SDL_GetWindowSize(sdlw->window, &currentWidth, &currentHeight);
-                        #endif
+#if defined(ENABLE_TOUCH_OVERLAY)
+                if (IN_TouchOverlayActive())
+                {
+                    sdlwGetWindowSize(&currentWidth, &currentHeight);
+                }
+                else
+#endif
+                {
+                    SDL_GetWindowSize(sdlw->window, &currentWidth, &currentHeight);
+                }
                 if (windowWidth != currentWidth || windowHeight != currentHeight)
                 {
                     updateNeeded = true;
@@ -4568,19 +4570,17 @@ static bool R_Window_update(bool forceFlag)
         }
     }
     
-	int effectiveWidth, effectiveHeight;
-#if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISHOS)
+        int effectiveWidth, effectiveHeight;
+#if defined(ENABLE_TOUCH_OVERLAY)
         if (IN_TouchOverlayActive())
         {
-                SDL_GetWindowSize(sdlw->window, &effectiveHeight, &effectiveWidth);
+                sdlwGetWindowSize(&effectiveWidth, &effectiveHeight);
         }
         else
+#endif
         {
                 SDL_GetWindowSize(sdlw->window, &effectiveWidth, &effectiveHeight);
         }
-#else
-        SDL_GetWindowSize(sdlw->window, &effectiveWidth, &effectiveHeight);
-#endif
 #if defined(ENABLE_TOUCH_OVERLAY)
         if (R_TouchOverlayShouldRender()) {
                 viddef.width = sailfish_fbo.bw;

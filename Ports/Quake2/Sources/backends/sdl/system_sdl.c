@@ -158,27 +158,56 @@ char* Sys_GetCurrentDirectory()
 
 char* Sys_GetHomeDir()
 {
-	static char *homeDir = NULL;
-	if (homeDir == NULL)
-	{
-		#ifdef SAILFISHOS
-			const char *linuxHome = getenv("HOME");
-			homeDir = va("%s/.local/share/ru.sashikknox/quake2/\0", linuxHome);
-		#else
-			homeDir = SDL_GetPrefPath(QUAKE2_TEAM_NAME, "Quake2");
-		#endif
+        static char *homeDir = NULL;
+        static qboolean homeDirAllocated = false;
+        static qboolean overlayPath = false;
+        qboolean overlayActive = IN_TouchOverlayActive();
+        if (!overlayActive)
+        {
+                const char *touchEnv = getenv("QUAKE2_TOUCH_OVERLAY");
+                if (touchEnv && touchEnv[0] && strcmp(touchEnv, "0") != 0)
+                        overlayActive = true;
+        }
 
-		#ifdef _WIN32
-		while (1)
-		{
-			char *backSlash = strchr(homeDir, '\\');
-			if (backSlash == NULL)
-				break;
-			*backSlash = '/';
-		}
-		#endif // _WIN32
-	}
-	return homeDir;
+        if (homeDir != NULL && overlayPath != overlayActive)
+        {
+                if (homeDirAllocated)
+                {
+                        SDL_free(homeDir);
+                        homeDirAllocated = false;
+                }
+                homeDir = NULL;
+        }
+        if (homeDir == NULL)
+        {
+                const char *appName = overlayActive ? "Quake2TouchOverlay" : "Quake2";
+                homeDir = SDL_GetPrefPath(QUAKE2_TEAM_NAME, appName);
+                overlayPath = overlayActive;
+                homeDirAllocated = (homeDir != NULL);
+                if (homeDir == NULL)
+                {
+                        const char *linuxHome = getenv("HOME");
+                        if (linuxHome != NULL)
+                        {
+                                homeDir = va("%s/.local/share/%s/%s/", linuxHome, QUAKE2_TEAM_NAME, appName);
+                                overlayPath = overlayActive;
+                        }
+                }
+
+                #ifdef _WIN32
+                if (homeDir != NULL)
+                {
+                        while (1)
+                        {
+                                char *backSlash = strchr(homeDir, '\\');
+                                if (backSlash == NULL)
+                                        break;
+                                *backSlash = '/';
+                        }
+                }
+                #endif // _WIN32
+        }
+        return homeDir;
 }
 
 void Sys_FreeLibrary(void *handle)

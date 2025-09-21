@@ -15,6 +15,14 @@ CC = gcc
 CXX = g++
 AR = ar
 
+TOUCH_OVERLAY_DEFINE :=
+ifneq ($(strip $(ENABLE_TOUCH_OVERLAY)),)
+  TOUCH_OVERLAY_DEFINE += -DENABLE_TOUCH_OVERLAY
+endif
+ifneq ($(strip $(QUAKE2_TOUCH_OVERLAY)),)
+  TOUCH_OVERLAY_DEFINE += -DENABLE_TOUCH_OVERLAY
+endif
+
 ifndef RESCOMP
   ifdef WINDRES
     RESCOMP = $(WINDRES)
@@ -37,7 +45,7 @@ ifeq ($(config),release)
   OBJDIR     = $(BASEDIR)/Release/obj/quake2-game
   TARGETDIR  = $(BASEDIR)/Release/bin/baseq2
   TARGET     = $(TARGETDIR)/game.so
-  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP -DSAILFISHOS
+  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP $(TOUCH_OVERLAY_DEFINE)
   INCLUDES  += -I../../../../../Engine/External/include -I../../../Sources
   ALL_CPPFLAGS  += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS    += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -ffast-math -Wall -Wextra -O2 -fPIC -std=c99 -Wno-unused-function -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-switch -Wno-missing-field-initializers -fPIC -fvisibility=hidden
@@ -58,7 +66,7 @@ ifeq ($(config),debug)
   OBJDIR     = $(BASEDIR)/Debug/obj/quake2-game
   TARGETDIR  = $(BASEDIR)/Debug/bin/baseq2
   TARGET     = $(TARGETDIR)/game.so
-  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP
+  DEFINES   += -DARCH=\"i386\" -DOSTYPE=\"Linux\" -DNOUNCRYPT -DZIP $(TOUCH_OVERLAY_DEFINE)
   INCLUDES  += -I../../../../../Engine/External/include -I../../../Sources
   ALL_CPPFLAGS  += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)
   ALL_CFLAGS    += $(CFLAGS) $(ALL_CPPFLAGS) $(ARCH) -ffast-math -Wall -Wextra -g -fPIC -std=c99 -Wno-unused-function -Wno-unused-parameter -Wno-unused-but-set-variable -Wno-switch -Wno-missing-field-initializers -fPIC -fvisibility=hidden

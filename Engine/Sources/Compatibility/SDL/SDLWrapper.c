@@ -192,9 +192,15 @@ bool sdlwCreateWindow(const char *windowName, int windowWidth, int windowHeight,
     windowPos = SDL_WINDOWPOS_UNDEFINED;
     flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN;
 #endif
-        if ((sdlw->window=SDL_CreateWindow(windowName, windowPos, windowPos, windowWidth, windowHeight, flags))==NULL) goto on_error;
+    #if defined(ENABLE_TOUCH_OVERLAY) && defined(SDL_VIDEO_DRIVER_WAYLAND)
+    #ifdef SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION
+    SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION, "landscape");
+    SDL_SetHint(SDL_HINT_QTWAYLAND_WINDOW_FLAGS, "OverridesSystemGestures");
+    #endif
+    #endif
+    if ((sdlw->window=SDL_CreateWindow(windowName, windowPos, windowPos, windowWidth, windowHeight, flags))==NULL) goto on_error;
 #ifdef ENABLE_TOUCH_OVERLAY
-    sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE); // SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION,"landscape");
+    sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE);
 #endif
     return false;
 on_error:

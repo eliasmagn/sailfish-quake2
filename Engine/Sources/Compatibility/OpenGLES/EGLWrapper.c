@@ -5,7 +5,7 @@
 
 #if defined(__RASPBERRY_PI__)
 #include "bcm_host.h"
-#elif defined(SAILFISHOS)
+#elif defined(SDL_VIDEO_DRIVER_WAYLAND)
 // #include "../../../../SDL2-src/SDL2/src/video/wayland/SDL_waylandwindow.h"
 #endif
 
@@ -316,7 +316,7 @@ static EGLNativeWindowType eglwGetNativeWindow()
     nativeWindow=wmInfo.info.win.window;
     #elif defined(__unix__) && defined(SDL_VIDEO_DRIVER_X11)
     nativeWindow=(EGLNativeWindowType)wmInfo.info.x11.window;
-    #elif defined(SAILFISHOS) && defined(SDL_VIDEO_DRIVER_WAYLAND)
+    #elif defined(SDL_VIDEO_DRIVER_WAYLAND)
     nativeWindow=(EGLNativeWindowType)wmInfo.info.wl.egl_window;
     #endif
 
@@ -356,7 +356,7 @@ bool eglwInitialize(EglwConfigInfo *minimalCfgi, EglwConfigInfo *requestedCfgi, 
         nativeDisplay = wmInfo.info.x11.display;
         // nativeDisplay = XOpenDisplay(NULL);
 	}
-    #elif defined(SAILFISHOS) && defined(SDL_VIDEO_DRIVER_WAYLAND)
+    #elif defined(SDL_VIDEO_DRIVER_WAYLAND)
     {
         struct SDL_SysWMinfo wmInfo;
         SDL_VERSION(&wmInfo.version);

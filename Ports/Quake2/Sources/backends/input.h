@@ -28,6 +28,7 @@
 #define GEN_INPUT_H
 
 #include "common/shared/shared.h"
+#include <stdbool.h>
 
 /*
  * Initializes the input backend
@@ -48,5 +49,10 @@ void IN_Shutdown();
  * Updates the state of the input queue
  */
 void IN_Update();
+
+/*
+ * Returns true if the touch overlay is enabled
+ */
+bool IN_TouchOverlayActive(void);
 
 #endif

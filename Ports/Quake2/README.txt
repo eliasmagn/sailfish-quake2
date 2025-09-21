@@ -6,6 +6,12 @@ It works also under Windows 7 and PC Linux.
 
 It is based on Yamagi Quake II version 5.26 which is itself based on Icculus Quake II, which is itself based on Quake II 3.21.
 
+Touch overlay
+-------------
+
+The SDL input backend provides the `in_touch_overlay` console variable to control the virtual touch controls.
+Set it to `1` (or export the environment variable `QUAKE2_TOUCH_OVERLAY=1` before launching the game) to enable the overlay on startup.
+
 How to build
 ------------
 

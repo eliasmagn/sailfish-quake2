@@ -9,7 +9,42 @@ SDL_BUILD_DIR="${BUILD_DIR}/sdl2"
 MAKE_DIR="${ROOT_DIR}/Ports/Quake2/Premake/Build-SailfishOS/gmake"
 
 CROSS_TRIPLE=${CROSS_TRIPLE:-arm-linux-gnueabihf}
-SYSROOT=${SYSROOT:-$(${CROSS_TRIPLE}-gcc -print-sysroot)}
+
+find_prefixed_tool() {
+    local base=$1
+    local resolved
+
+    if resolved=$(type -P "${base}" 2>/dev/null); then
+        echo "${resolved}"
+        return 0
+    fi
+
+    local -a matches=()
+    while IFS= read -r candidate; do
+        [[ "${candidate}" == "${base}" ]] && continue
+        [[ "${candidate}" == ${base}-* ]] || continue
+        local suffix="${candidate#${base}-}"
+        [[ "${suffix}" =~ ^[0-9][0-9.]*$ ]] || continue
+        if resolved=$(type -P "${candidate}" 2>/dev/null); then
+            matches+=("${resolved}")
+        fi
+    done < <(compgen -c "${base}")
+
+    if ((${#matches[@]} == 0)); then
+        echo "Error: unable to locate a tool for prefix '${base}' in PATH" >&2
+        exit 1
+    fi
+
+    printf '%s\n' "${matches[@]}" | sort -Vr | head -n1
+}
+
+CROSS_CC=${CROSS_CC:-$(find_prefixed_tool "${CROSS_TRIPLE}-gcc")}
+CROSS_CXX=${CROSS_CXX:-$(find_prefixed_tool "${CROSS_TRIPLE}-g++")}
+CROSS_AR=${CROSS_AR:-$(find_prefixed_tool "${CROSS_TRIPLE}-ar")}
+CROSS_RANLIB=${CROSS_RANLIB:-$(find_prefixed_tool "${CROSS_TRIPLE}-ranlib")}
+CROSS_STRIP=${CROSS_STRIP:-$(find_prefixed_tool "${CROSS_TRIPLE}-strip")}
+
+SYSROOT=${SYSROOT:-$(${CROSS_CC} -print-sysroot)}
 NPROC=${NPROC:-$(nproc)}
 RESC_PATH=${RESC_PATH:-/usr/share/ru.sashikknox.quake2/res/}
 
@@ -22,6 +57,13 @@ join_by_colon() {
     local IFS=:
     echo "$*"
 }
+
+log "Using toolchain binaries:"
+log "  CC=${CROSS_CC}"
+log "  CXX=${CROSS_CXX}"
+log "  AR=${CROSS_AR}"
+log "  RANLIB=${CROSS_RANLIB}"
+log "  STRIP=${CROSS_STRIP}"
 
 log "Preparing build directories"
 rm -rf "${BUILD_DIR}"
@@ -45,8 +87,8 @@ cmake -S "${ROOT_DIR}/SDL2" -B "${SDL_BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_SYSTEM_NAME=Linux \
     -DCMAKE_SYSTEM_PROCESSOR=arm \
-    -DCMAKE_C_COMPILER="${CROSS_TRIPLE}-gcc" \
-    -DCMAKE_CXX_COMPILER="${CROSS_TRIPLE}-g++" \
+    -DCMAKE_C_COMPILER="${CROSS_CC}" \
+    -DCMAKE_CXX_COMPILER="${CROSS_CXX}" \
     -DCMAKE_SYSROOT="${SYSROOT}" \
     -DCMAKE_FIND_ROOT_PATH="${PREFIX_DIR};${SYSROOT}" \
     -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
@@ -69,10 +111,10 @@ make distclean >/dev/null 2>&1 || true
     --prefix="${PREFIX_DIR}" \
     --disable-shared \
     --enable-static \
-    CC="${CROSS_TRIPLE}-gcc" \
-    CXX="${CROSS_TRIPLE}-g++" \
-    AR="${CROSS_TRIPLE}-ar" \
-    RANLIB="${CROSS_TRIPLE}-ranlib"
+    CC="${CROSS_CC}" \
+    CXX="${CROSS_CXX}" \
+    AR="${CROSS_AR}" \
+    RANLIB="${CROSS_RANLIB}"
 make -j "${NPROC}"
 make install
 popd > /dev/null
@@ -87,10 +129,10 @@ COMMON_LDFLAGS=("--sysroot=${SYSROOT}" "-L${PREFIX_DIR}/lib" "-L${SYSROOT}/usr/l
 
 log "Building Quake II targets (release)"
 env \
-    CC="${CROSS_TRIPLE}-gcc" \
-    CXX="${CROSS_TRIPLE}-g++" \
-    AR="${CROSS_TRIPLE}-ar" \
-    STRIP="${CROSS_TRIPLE}-strip" \
+    CC="${CROSS_CC}" \
+    CXX="${CROSS_CXX}" \
+    AR="${CROSS_AR}" \
+    STRIP="${CROSS_STRIP}" \
     CFLAGS="${COMMON_FLAGS[*]}" \
     CXXFLAGS="${COMMON_FLAGS[*]}" \
     LDFLAGS="${COMMON_LDFLAGS[*]}" \
@@ -103,10 +145,10 @@ env \
 
 log "Building Quake II GLES2 debug binary"
 env \
-    CC="${CROSS_TRIPLE}-gcc" \
-    CXX="${CROSS_TRIPLE}-g++" \
-    AR="${CROSS_TRIPLE}-ar" \
-    STRIP="${CROSS_TRIPLE}-strip" \
+    CC="${CROSS_CC}" \
+    CXX="${CROSS_CXX}" \
+    AR="${CROSS_AR}" \
+    STRIP="${CROSS_STRIP}" \
     CFLAGS="${COMMON_FLAGS[*]}" \
     CXXFLAGS="${COMMON_FLAGS[*]}" \
     LDFLAGS="${COMMON_LDFLAGS[*]}" \

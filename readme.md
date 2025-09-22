@@ -1,8 +1,16 @@
 # Sailfish Quake II (Touch Overlay Build Defaults)
 
-This repository contains build system outputs and dependencies for the Sailfish OS port of Quake II.  The GLES2 makefiles under `Ports/Quake2/Premake` have been updated so the virtual touch overlay is compiled in by default, eliminating the need to export extra environment variables when preparing release or debug binaries.
+This repository contains build system outputs and dependencies for the Sailfish OS port of Quake II.  The GLES2 makefiles under `Ports/Quake2/Premake` have been updated so the virtual touch overlay is compiled in by default, eliminating the need to export extra environment variables when preparing release or debug binaries.  The armhf helper script has also been modernised so it can locate version-suffixed cross-compilers (for example `arm-linux-gnueabihf-gcc-10`) without additional configuration.
 
 ## Building the GLES2 Client
+
+To build everything (SDL2, libogg, and the game targets) for armhf in one pass, execute the helper script:
+
+```bash
+./build_armhf.sh
+```
+
+The script automatically searches the `PATH` for the best matching `arm-linux-gnueabihf-*` binaries, even when toolchains are installed with explicit version suffixes.  You can still override the detected commands by setting `CROSS_CC`, `CROSS_CXX`, `CROSS_AR`, `CROSS_RANLIB`, or `CROSS_STRIP` before launching the script if you need a specific compiler revision.
 
 To build the GLES2 client for armhf targets, run:
 
@@ -16,7 +24,7 @@ For desktop Linux testing you can issue:
 make -C Ports/Quake2/Premake/Build-Linux/gmake config=release quake2-gles2
 ```
 
-The build expects SDL2, OpenGL ES 2.0, and zlib development headers to be available for the selected architecture.  Cross-compiling for armhf may require an appropriate toolchain and sysroot.
+The build expects SDL2, OpenGL ES 2.0, and zlib development headers to be available for the selected architecture.  Cross-compiling for armhf may require an appropriate toolchain and sysroot; the helper script uses the detected compiler's `-print-sysroot` output to set these paths automatically.
 
 If the link step reports missing libraries such as `-lGLESv2`, `-lEGL`, or `-lSDL2`, install the corresponding development packages (or point the build to your cross-compilation sysroot) before rerunning `make`.
 

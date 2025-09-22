@@ -11861,6 +11861,9 @@ esac
     break
   fi
 done
+if test "$am__include" = "include"; then
+  am__include='-include'
+fi
 rm -f confinc.* confmf.*
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${_am_result}" >&5
 $as_echo "${_am_result}" >&6; }
@@ -12173,7 +12176,7 @@ $as_echo_n "checking whether to enable maintainer-specific portions of Makefiles
 if test "${enable_maintainer_mode+set}" = set; then :
   enableval=$enable_maintainer_mode; USE_MAINTAINER_MODE=$enableval
 else
-  USE_MAINTAINER_MODE=yes
+  USE_MAINTAINER_MODE=no
 fi
 
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $USE_MAINTAINER_MODE" >&5

@@ -10,5 +10,7 @@
 - [x] Restore a dedicated toolchain sysroot override alongside the staging directory controls in the armhf build helper.
 - [x] Mirror the autotools `MESA_EGL_NO_X11_HEADERS` handling inside the SDL2 CMake checks so EGL builds work without Xlib.
 - [x] Allow the armhf build helper to use configurable build and staging directories while protecting external sysroots from clean operations.
+- [x] Disable libogg's maintainer mode by default so release builds no longer depend on locally installed automake helpers.
+- [x] Include libogg's generated dependency files optionally so missing `.deps` directories do not abort incremental builds.
 - [ ] Validate the GLES2 build on actual Sailfish OS hardware to confirm the runtime touch overlay visuals.
 - [ ] Provide GLESv2, EGL, and SDL2 development libraries in the build environment (or cross toolchain) so linking succeeds locally.

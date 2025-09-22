@@ -2,8 +2,80 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-BUILD_DIR="${ROOT_DIR}/build-armhf"
-STAGING_DIR="${BUILD_DIR}/sysroot"
+
+usage() {
+    cat <<'USAGE'
+Usage: ./build_armhf.sh [--build-dir PATH] [--sysroot PATH]
+
+Optional arguments:
+  --build-dir PATH   Override the directory used for intermediate build files.
+                     Can also be set via ARMHF_BUILD_DIR.
+  --sysroot PATH     Override the staging sysroot directory that receives
+                     installed dependencies. Can also be set via
+                     ARMHF_SYSROOT_DIR.
+  -h, --help         Show this help message and exit.
+USAGE
+}
+
+cli_build_dir=""
+cli_sysroot_dir=""
+while (($# > 0)); do
+    case $1 in
+        --build-dir)
+            if (($# < 2)); then
+                echo "Error: --build-dir requires a path argument" >&2
+                usage
+                exit 1
+            fi
+            cli_build_dir=$2
+            shift 2
+            ;;
+        --sysroot)
+            if (($# < 2)); then
+                echo "Error: --sysroot requires a path argument" >&2
+                usage
+                exit 1
+            fi
+            cli_sysroot_dir=$2
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: unknown argument '$1'" >&2
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+default_build_dir="${ROOT_DIR}/build-armhf"
+default_sysroot_dir="${ROOT_DIR}/../sailfish-quake2-sysroot"
+
+build_dir_source="default"
+if [[ -n "${cli_build_dir}" ]]; then
+    BUILD_DIR="${cli_build_dir}"
+    build_dir_source="command-line"
+elif [[ -n "${ARMHF_BUILD_DIR:-}" ]]; then
+    BUILD_DIR="${ARMHF_BUILD_DIR}"
+    build_dir_source="environment"
+else
+    BUILD_DIR="${default_build_dir}"
+fi
+
+sysroot_dir_source="default"
+if [[ -n "${cli_sysroot_dir}" ]]; then
+    STAGING_DIR="${cli_sysroot_dir}"
+    sysroot_dir_source="command-line"
+elif [[ -n "${ARMHF_SYSROOT_DIR:-}" ]]; then
+    STAGING_DIR="${ARMHF_SYSROOT_DIR}"
+    sysroot_dir_source="environment"
+else
+    STAGING_DIR="${default_sysroot_dir}"
+fi
+
 PREFIX_DIR="${STAGING_DIR}/usr"
 SDL_BUILD_DIR="${BUILD_DIR}/sdl2"
 MAKE_DIR="${ROOT_DIR}/Ports/Quake2/Premake/Build-SailfishOS/gmake"
@@ -14,6 +86,21 @@ log() {
     echo
     echo "==> $*"
 }
+
+log "Build helper configuration"
+log "  ROOT_DIR=${ROOT_DIR}"
+log "  BUILD_DIR=${BUILD_DIR}"${build_dir_source:+" (source: ${build_dir_source})"}
+log "  STAGING_DIR=${STAGING_DIR}"${sysroot_dir_source:+" (source: ${sysroot_dir_source})"}
+log "  PREFIX_DIR=${PREFIX_DIR}"
+log "  SDL_BUILD_DIR=${SDL_BUILD_DIR}"
+
+if [[ "${build_dir_source}" != "default" || "${sysroot_dir_source}" != "default" ]]; then
+    log "Detected custom directory overrides. Continuing with the user-supplied paths."
+fi
+
+echo
+echo "If any of the above paths look incorrect, press Ctrl+C to abort. Continuing in 5 seconds..."
+sleep 5
 
 join_by_colon() {
     local IFS=:
@@ -218,6 +305,11 @@ log "  STRIP=${CROSS_STRIP}"
 
 log "Preparing build directories"
 rm -rf "${BUILD_DIR}"
+if [[ "${sysroot_dir_source}" == "default" ]]; then
+    rm -rf "${STAGING_DIR}"
+else
+    log "Preserving existing contents of ${STAGING_DIR} (custom override in use)"
+fi
 mkdir -p "${SDL_BUILD_DIR}" "${PREFIX_DIR}"
 
 log "Configuring pkg-config search paths for ${CROSS_TRIPLE}"

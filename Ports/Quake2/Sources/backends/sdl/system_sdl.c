@@ -189,8 +189,18 @@ char* Sys_GetHomeDir()
                         const char *linuxHome = getenv("HOME");
                         if (linuxHome != NULL)
                         {
-                                homeDir = va("%s/.local/share/%s/%s/", linuxHome, QUAKE2_TEAM_NAME, appName);
-                                overlayPath = overlayActive;
+                                char fallbackPath[MAX_OSPATH];
+                                int fallbackLen = SDL_snprintf(fallbackPath, sizeof(fallbackPath), "%s/.local/share/%s/%s/", linuxHome, QUAKE2_TEAM_NAME, appName);
+                                if (fallbackLen >= 0 && fallbackLen < (int)sizeof(fallbackPath))
+                                {
+                                        homeDir = SDL_strdup(fallbackPath);
+                                        if (homeDir == NULL)
+                                        {
+                                                return NULL;
+                                        }
+                                        overlayPath = overlayActive;
+                                        homeDirAllocated = true;
+                                }
                         }
                 }
 

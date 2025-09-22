@@ -4,6 +4,9 @@
 #include "client/refresh/r_private.h"
 
 #include <SDL/SDLWrapper.h>
+#ifdef ENABLE_TOUCH_OVERLAY
+#include <SDL/vkb.h>
+#endif
 #ifdef SAILFISH_FBO
 #include <SDL/gl_vkb.h>
 #include "input_sdl_private.c"
@@ -541,8 +544,7 @@ bool IN_processEvent(SDL_Event *event)
                 if (!IN_TouchOverlayActive())
                         break;
                 {
-			int touch_count = 0;
-			transformTouch(&event->tfinger.x, &event->tfinger.y);
+                        transformTouch(&event->tfinger.x, &event->tfinger.y);
 
 			for(int i = 0; i < MAX_FINGER; i++) {
 				if( fingers[i].finger_id == event->tfinger.fingerId ){
@@ -1159,32 +1161,36 @@ void IN_Move(usercmd_t *cmd)
     }
 
 #ifdef ENABLE_TOUCH_OVERLAY
-        if (IN_TouchOverlayActive()) {
-                for(int i = 0; i < MAX_FINGER; i++ ) {
-                        if( fingers[i].pressed ) {
-                        if ( is_PointInRect(fingers[i].press_x, fingers[i].press_y, &sr_joystick) ) {
-                                // here we should compute it as joystick
-                                float joyX, joyY;
-                                int w,h;
-                                sdlwGetWindowSize(&w, &h);
-				float joySize = (float)h * 0.15;
-				joyX = (float)(fingers[i].x - fingers[i].press_x);
-				joyY = (float)(fingers[i].y - fingers[i].press_y);
-				float angle = atan2f(joyX, joyY);
-				float vec_len = sqrtf(joyX*joyX + joyY*joyY)/joySize;
-				if( vec_len > 1.0 ) 
-					vec_len = 1.0;
-				joyX = sin(angle) * vec_len;
-				joyY = cos(angle) * vec_len;
-				// joyXFloat = ComputeStickValue(joyX);
-				// joyYFloat = ComputeStickValue(joyY);
-                                cmd->sidemove    += cl_speed_side->value    *  joyX * running;
-                                cmd->forwardmove += cl_speed_forward->value * -joyY * running;
-                                break;
-                        }
-                }
+    if (IN_TouchOverlayActive())
+    {
+        for (int i = 0; i < MAX_FINGER; ++i)
+        {
+            if (!fingers[i].pressed)
+                continue;
+
+            if (is_PointInRect(fingers[i].press_x, fingers[i].press_y, &sr_joystick))
+            {
+                // here we should compute it as joystick
+                float joyX, joyY;
+                int w, h;
+                sdlwGetWindowSize(&w, &h);
+                float joySize = (float)h * 0.15f;
+                joyX = (float)(fingers[i].x - fingers[i].press_x);
+                joyY = (float)(fingers[i].y - fingers[i].press_y);
+                float angle = atan2f(joyX, joyY);
+                float vec_len = sqrtf(joyX * joyX + joyY * joyY) / joySize;
+                if (vec_len > 1.0f)
+                    vec_len = 1.0f;
+                joyX = sin(angle) * vec_len;
+                joyY = cos(angle) * vec_len;
+                // joyXFloat = ComputeStickValue(joyX);
+                // joyYFloat = ComputeStickValue(joyY);
+                cmd->sidemove += cl_speed_side->value * joyX * running;
+                cmd->forwardmove += cl_speed_forward->value * -joyY * running;
+                break;
+            }
         }
-#else
+    }
 #endif
     /* add mouse X/Y movement to cmd */
     if ((in_strafe.state & 1) || (input_lookstrafe->value && (in_mlook.state & 1)))

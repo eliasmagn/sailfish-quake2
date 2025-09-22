@@ -561,6 +561,13 @@ macro(CheckX11)
 
       set(CMAKE_REQUIRED_LIBRARIES)
     endif()
+  else()
+    # Prevent Mesa from trying to include X11 headers when the X11 video
+    # driver is disabled.  This mirrors the autotools build, ensuring EGL
+    # builds that rely on the framebuffer paths compile without libX11
+    # development headers being present in the sysroot.
+    list(APPEND EXTRA_CFLAGS "-DMESA_EGL_NO_X11_HEADERS")
+    list(APPEND EXTRA_CFLAGS "-DEGL_NO_X11")
   endif()
 endmacro()
 
@@ -763,7 +770,10 @@ macro(CheckOpenGLESX11)
   set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${EGL_CFLAGS}")
   if(VIDEO_OPENGLES)
     check_c_source_compiles("
+        #define LINUX
         #define EGL_API_FB
+        #define MESA_EGL_NO_X11_HEADERS
+        #define EGL_NO_X11
         #include <EGL/egl.h>
         int main (int argc, char** argv) {}" HAVE_VIDEO_OPENGL_EGL)
     if(HAVE_VIDEO_OPENGL_EGL)

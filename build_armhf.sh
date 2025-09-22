@@ -5,20 +5,24 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 usage() {
     cat <<'USAGE'
-Usage: ./build_armhf.sh [--build-dir PATH] [--sysroot PATH]
+Usage: ./build_armhf.sh [--build-dir PATH] [--staging-dir PATH] [--sysroot PATH]
 
 Optional arguments:
-  --build-dir PATH   Override the directory used for intermediate build files.
-                     Can also be set via ARMHF_BUILD_DIR.
-  --sysroot PATH     Override the staging sysroot directory that receives
-                     installed dependencies. Can also be set via
-                     ARMHF_SYSROOT_DIR.
-  -h, --help         Show this help message and exit.
+  --build-dir PATH    Override the directory used for intermediate build files.
+                      Can also be set via ARMHF_BUILD_DIR.
+  --staging-dir PATH  Override the staging directory that receives installed
+                      dependencies. Can also be set via ARMHF_STAGING_DIR or
+                      the legacy ARMHF_SYSROOT_DIR variable.
+  --sysroot PATH      Override the toolchain sysroot used when invoking the
+                      cross-compiler and pkg-config. Can also be set via
+                      ARMHF_SYSROOT or SYSROOT.
+  -h, --help          Show this help message and exit.
 USAGE
 }
 
 cli_build_dir=""
-cli_sysroot_dir=""
+cli_staging_dir=""
+cli_sysroot=""
 while (($# > 0)); do
     case $1 in
         --build-dir)
@@ -30,13 +34,22 @@ while (($# > 0)); do
             cli_build_dir=$2
             shift 2
             ;;
+        --staging-dir)
+            if (($# < 2)); then
+                echo "Error: --staging-dir requires a path argument" >&2
+                usage
+                exit 1
+            fi
+            cli_staging_dir=$2
+            shift 2
+            ;;
         --sysroot)
             if (($# < 2)); then
                 echo "Error: --sysroot requires a path argument" >&2
                 usage
                 exit 1
             fi
-            cli_sysroot_dir=$2
+            cli_sysroot=$2
             shift 2
             ;;
         -h|--help)
@@ -52,7 +65,7 @@ while (($# > 0)); do
 done
 
 default_build_dir="${ROOT_DIR}/build-armhf"
-default_sysroot_dir="${ROOT_DIR}/../sailfish-quake2-sysroot"
+default_staging_dir="${ROOT_DIR}/../sailfish-quake2-sysroot"
 
 build_dir_source="default"
 if [[ -n "${cli_build_dir}" ]]; then
@@ -65,15 +78,18 @@ else
     BUILD_DIR="${default_build_dir}"
 fi
 
-sysroot_dir_source="default"
-if [[ -n "${cli_sysroot_dir}" ]]; then
-    STAGING_DIR="${cli_sysroot_dir}"
-    sysroot_dir_source="command-line"
+staging_dir_source="default"
+if [[ -n "${cli_staging_dir}" ]]; then
+    STAGING_DIR="${cli_staging_dir}"
+    staging_dir_source="command-line"
+elif [[ -n "${ARMHF_STAGING_DIR:-}" ]]; then
+    STAGING_DIR="${ARMHF_STAGING_DIR}"
+    staging_dir_source="environment"
 elif [[ -n "${ARMHF_SYSROOT_DIR:-}" ]]; then
     STAGING_DIR="${ARMHF_SYSROOT_DIR}"
-    sysroot_dir_source="environment"
+    staging_dir_source="environment (ARMHF_SYSROOT_DIR)"
 else
-    STAGING_DIR="${default_sysroot_dir}"
+    STAGING_DIR="${default_staging_dir}"
 fi
 
 PREFIX_DIR="${STAGING_DIR}/usr"
@@ -90,11 +106,11 @@ log() {
 log "Build helper configuration"
 log "  ROOT_DIR=${ROOT_DIR}"
 log "  BUILD_DIR=${BUILD_DIR}"${build_dir_source:+" (source: ${build_dir_source})"}
-log "  STAGING_DIR=${STAGING_DIR}"${sysroot_dir_source:+" (source: ${sysroot_dir_source})"}
+log "  STAGING_DIR=${STAGING_DIR}"${staging_dir_source:+" (source: ${staging_dir_source})"}
 log "  PREFIX_DIR=${PREFIX_DIR}"
 log "  SDL_BUILD_DIR=${SDL_BUILD_DIR}"
 
-if [[ "${build_dir_source}" != "default" || "${sysroot_dir_source}" != "default" ]]; then
+if [[ "${build_dir_source}" != "default" || "${staging_dir_source}" != "default" ]]; then
     log "Detected custom directory overrides. Continuing with the user-supplied paths."
 fi
 
@@ -232,10 +248,10 @@ ensure_dependencies() {
     done
 
     if command -v pkg-config >/dev/null 2>&1; then
-        if ! pkg-config --exists dbus-1; then
+        if ! (unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR PKG_CONFIG_PATH; pkg-config --exists dbus-1); then
             missing_packages+=("libdbus-1-dev")
         fi
-        if ! pkg-config --exists libpulse; then
+        if ! (unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR PKG_CONFIG_PATH; pkg-config --exists libpulse); then
             missing_packages+=("libpulse-dev")
         fi
     fi
@@ -292,7 +308,21 @@ CROSS_AR=${CROSS_AR:-$(find_prefixed_tool "${CROSS_TRIPLE}-ar")}
 CROSS_RANLIB=${CROSS_RANLIB:-$(find_prefixed_tool "${CROSS_TRIPLE}-ranlib")}
 CROSS_STRIP=${CROSS_STRIP:-$(find_prefixed_tool "${CROSS_TRIPLE}-strip")}
 
-SYSROOT=${SYSROOT:-$(${CROSS_CC} -print-sysroot)}
+original_sysroot=${SYSROOT:-}
+toolchain_sysroot_source="compiler"
+if [[ -n "${cli_sysroot}" ]]; then
+    SYSROOT="${cli_sysroot}"
+    toolchain_sysroot_source="command-line"
+elif [[ -n "${ARMHF_SYSROOT:-}" ]]; then
+    SYSROOT="${ARMHF_SYSROOT}"
+    toolchain_sysroot_source="environment (ARMHF_SYSROOT)"
+elif [[ -n "${original_sysroot}" ]]; then
+    SYSROOT="${original_sysroot}"
+    toolchain_sysroot_source="environment (SYSROOT)"
+else
+    SYSROOT=$(${CROSS_CC} -print-sysroot)
+fi
+
 NPROC=${NPROC:-$(nproc)}
 RESC_PATH=${RESC_PATH:-/usr/share/ru.sashikknox.quake2/res/}
 
@@ -302,10 +332,11 @@ log "  CXX=${CROSS_CXX}"
 log "  AR=${CROSS_AR}"
 log "  RANLIB=${CROSS_RANLIB}"
 log "  STRIP=${CROSS_STRIP}"
+log "  SYSROOT=${SYSROOT}"${toolchain_sysroot_source:+" (source: ${toolchain_sysroot_source})"}
 
 log "Preparing build directories"
 rm -rf "${BUILD_DIR}"
-if [[ "${sysroot_dir_source}" == "default" ]]; then
+if [[ "${staging_dir_source}" == "default" ]]; then
     rm -rf "${STAGING_DIR}"
 else
     log "Preserving existing contents of ${STAGING_DIR} (custom override in use)"

@@ -418,23 +418,76 @@ log "Resetting previous Quake II build outputs"
 rm -rf "${ROOT_DIR}/Ports/Quake2/Output"
 
 log "Collecting dependency cflags"
-if ! DBUS_CFLAGS=$(pkg-config --cflags dbus-1 2>/dev/null); then
-    log "dbus-1.pc not found via pkg-config. Falling back to sysroot header search."
+collect_sysroot_dbus_cflags() {
+    local -n out=$1
+    out=()
     mapfile -t dbus_include_candidates < <(printf '%s\n' \
         "${SYSROOT}/usr/include/dbus-1.0" \
+        "${SYSROOT}/usr/include/${CROSS_TRIPLE}/dbus-1.0" \
         "${SYSROOT}/usr/lib/${CROSS_TRIPLE}/dbus-1.0/include" \
         "${SYSROOT}/usr/lib/dbus-1.0/include" \
+        "${SYSROOT}/lib/${CROSS_TRIPLE}/dbus-1.0/include" \
         "${SYSROOT}/lib/dbus-1.0/include")
 
-    DBUS_FALLBACK_CFLAGS=()
     for dir in "${dbus_include_candidates[@]}"; do
         if [[ -d "${dir}" ]]; then
-            DBUS_FALLBACK_CFLAGS+=("-I${dir}")
+            out+=("-I${dir}")
+        fi
+    done
+}
+
+stage_host_dbus_headers_into_sysroot() {
+    local -a staged_pairs=()
+    local -A copy_map=()
+
+    copy_map[/usr/include/dbus-1.0]="${SYSROOT}/usr/include/dbus-1.0"
+    copy_map[/usr/include/${CROSS_TRIPLE}/dbus-1.0]="${SYSROOT}/usr/include/${CROSS_TRIPLE}/dbus-1.0"
+    copy_map[/usr/lib/${CROSS_TRIPLE}/dbus-1.0/include]="${SYSROOT}/usr/lib/${CROSS_TRIPLE}/dbus-1.0/include"
+    copy_map[/usr/lib/dbus-1.0/include]="${SYSROOT}/usr/lib/dbus-1.0/include"
+    copy_map[/lib/${CROSS_TRIPLE}/dbus-1.0/include]="${SYSROOT}/lib/${CROSS_TRIPLE}/dbus-1.0/include"
+    copy_map[/lib/dbus-1.0/include]="${SYSROOT}/lib/dbus-1.0/include"
+
+    for src in "${!copy_map[@]}"; do
+        local dest=${copy_map[${src}]}
+        if [[ -d "${src}" ]]; then
+            mkdir -p "${dest}"
+            cp -a "${src}/." "${dest}/"
+            staged_pairs+=("${src}->${dest}")
         fi
     done
 
+    if ((${#staged_pairs[@]} > 0)); then
+        log "Staged host D-Bus headers into sysroot (${staged_pairs[*]})."
+        return 0
+    fi
+
+    return 1
+}
+
+derive_deb_arch_from_triple() {
+    if command -v dpkg-architecture >/dev/null 2>&1; then
+        dpkg-architecture -t "${CROSS_TRIPLE}" -qDEB_HOST_ARCH 2>/dev/null || true
+    fi
+}
+
+if ! DBUS_CFLAGS=$(pkg-config --cflags dbus-1 2>/dev/null); then
+    log "dbus-1.pc not found via pkg-config. Falling back to sysroot header search."
+
+    DBUS_FALLBACK_CFLAGS=()
+    collect_sysroot_dbus_cflags DBUS_FALLBACK_CFLAGS
+
+    if ((${#DBUS_FALLBACK_CFLAGS[@]} == 0)) && stage_host_dbus_headers_into_sysroot; then
+        collect_sysroot_dbus_cflags DBUS_FALLBACK_CFLAGS
+    fi
+
     if ((${#DBUS_FALLBACK_CFLAGS[@]} == 0)); then
-        log "Error: Unable to locate D-Bus headers in ${SYSROOT}. Install the target's libdbus development package and retry."
+        target_deb_arch=$(derive_deb_arch_from_triple)
+        if [[ -n "${target_deb_arch}" ]]; then
+            log "Error: Unable to locate D-Bus headers in ${SYSROOT}. Install libdbus-1-dev:${target_deb_arch} (or the equivalent target package) and re-run the script."
+        else
+            log "Error: Unable to locate D-Bus headers in ${SYSROOT}. Install the target's libdbus development package and re-run the script."
+        fi
+        log "If the headers are installed on the host, copy \"/usr/include/dbus-1.0\" and the matching \"dbus-1.0/include\" directories into the sysroot before retrying."
         exit 1
     fi
 

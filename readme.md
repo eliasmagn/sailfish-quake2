@@ -39,3 +39,5 @@ When targeting framebuffer or Wayland-only environments without an X11 stack, th
 ## Runtime Verification
 
 At runtime, setting `QUAKE2_TOUCH_OVERLAY=1` in the environment should trigger the virtual keyboard texture logging (e.g., `vkb_NewTexture2D`) and display the overlay on compatible hardware.  This behaviour requires deploying the freshly built binary onto the target device.
+
+The SDL backend now duplicates the fallback `$HOME/.local/share/...` path when SDL's preferred directory helpers are unavailable, so switching the overlay path frees only heap allocations and avoids dangling pointers to temporary buffers.  This prevents crashes when repeatedly toggling the touch overlay configuration during testing.

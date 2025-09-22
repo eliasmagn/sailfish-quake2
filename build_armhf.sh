@@ -113,10 +113,87 @@ ensure_dependencies() {
     local -a missing_commands=()
     local -a missing_packages=()
 
+    local manager
+    manager=$(detect_package_manager)
+
+    package_for() {
+        local pkg_manager=$1
+        local category=$2
+        local item=$3
+
+        case "${pkg_manager}" in
+            apt)
+                case "${category}" in
+                    host)
+                        case "${item}" in
+                            make) echo make ;;
+                            *) echo "${item}" ;;
+                        esac ;;
+                    cross)
+                        case "${item}" in
+                            gcc) echo gcc-arm-linux-gnueabihf ;;
+                            g++) echo g++-arm-linux-gnueabihf ;;
+                            ar|ranlib|strip) echo binutils-arm-linux-gnueabihf ;;
+                        esac ;;
+                    pkgconfig)
+                        case "${item}" in
+                            dbus) echo libdbus-1-dev ;;
+                            pulse) echo libpulse-dev ;;
+                        esac ;;
+                esac ;;
+            dnf)
+                case "${category}" in
+                    host)
+                        case "${item}" in
+                            make) echo make ;;
+                            autoconf) echo autoconf ;;
+                            automake) echo automake ;;
+                            libtool) echo libtool ;;
+                            cmake) echo cmake ;;
+                            pkg-config) echo pkgconf-pkg-config ;;
+                        esac ;;
+                    cross)
+                        case "${item}" in
+                            gcc) echo arm-linux-gnueabihf-gcc ;;
+                            g++) echo arm-linux-gnueabihf-g++ ;;
+                            ar|ranlib|strip) echo arm-linux-gnueabihf-binutils ;;
+                        esac ;;
+                    pkgconfig)
+                        case "${item}" in
+                            dbus) echo dbus-devel ;;
+                            pulse) echo pulseaudio-libs-devel ;;
+                        esac ;;
+                esac ;;
+            zypper)
+                case "${category}" in
+                    host)
+                        case "${item}" in
+                            make) echo make ;;
+                            autoconf) echo autoconf ;;
+                            automake) echo automake ;;
+                            libtool) echo libtool ;;
+                            cmake) echo cmake ;;
+                            pkg-config) echo pkg-config ;;
+                        esac ;;
+                    cross)
+                        case "${item}" in
+                            gcc) echo gcc-arm-linux-gnueabihf ;;
+                            g++) echo g++-arm-linux-gnueabihf ;;
+                            ar|ranlib|strip) echo binutils-arm-linux-gnueabihf ;;
+                        esac ;;
+                    pkgconfig)
+                        case "${item}" in
+                            dbus) echo libdbus-1-devel ;;
+                            pulse) echo libpulse-devel ;;
+                        esac ;;
+                esac ;;
+        esac
+    }
+
     declare -A command_to_package=(
         [cmake]=cmake
         [pkg-config]=pkg-config
-        [make]=build-essential
+        [make]=make
         [autoconf]=autoconf
         [automake]=automake
         [libtool]=libtool
@@ -125,7 +202,12 @@ ensure_dependencies() {
     for cmd in "${!command_to_package[@]}"; do
         if ! command -v "${cmd}" >/dev/null 2>&1; then
             missing_commands+=("${cmd}")
-            missing_packages+=("${command_to_package[${cmd}]}")
+            local pkg="${command_to_package[${cmd}]}"
+            local mgr_pkg="$(package_for "${manager}" host "${cmd}")"
+            if [[ -n "${mgr_pkg}" ]]; then
+                pkg="${mgr_pkg}"
+            fi
+            missing_packages+=("${pkg}")
         fi
     done
 
@@ -143,6 +225,10 @@ ensure_dependencies() {
         if ! compgen -c "${base}" >/dev/null; then
             missing_commands+=("${base}")
             local pkg="${cross_tool_packages[${tool}]}"
+            local mgr_pkg="$(package_for "${manager}" cross "${tool}")"
+            if [[ -n "${mgr_pkg}" ]]; then
+                pkg="${mgr_pkg}"
+            fi
             if [[ -n "${pkg}" ]]; then
                 missing_packages+=("${pkg}")
             fi
@@ -151,10 +237,20 @@ ensure_dependencies() {
 
     if command -v pkg-config >/dev/null 2>&1; then
         if ! pkg-config --exists dbus-1; then
-            missing_packages+=("libdbus-1-dev")
+            local pkg="libdbus-1-dev"
+            local mgr_pkg="$(package_for "${manager}" pkgconfig dbus)"
+            if [[ -n "${mgr_pkg}" ]]; then
+                pkg="${mgr_pkg}"
+            fi
+            missing_packages+=("${pkg}")
         fi
         if ! pkg-config --exists libpulse; then
-            missing_packages+=("libpulse-dev")
+            local pkg="libpulse-dev"
+            local mgr_pkg="$(package_for "${manager}" pkgconfig pulse)"
+            if [[ -n "${mgr_pkg}" ]]; then
+                pkg="${mgr_pkg}"
+            fi
+            missing_packages+=("${pkg}")
         fi
     fi
 

@@ -6,5 +6,6 @@
 - [x] Modernise the armhf build helper to auto-detect versioned cross-compilation toolchains.
 - [x] Add dependency validation and optional package installation to the armhf build helper.
 - [x] Teach the armhf helper to bypass X11-dependent EGL stubs when the sysroot lacks X11 headers.
+- [x] Map dependency prompts to distro-specific package names so automated installs succeed on apt, dnf, and zypper hosts.
 - [ ] Validate the GLES2 build on actual Sailfish OS hardware to confirm the runtime touch overlay visuals.
 - [ ] Provide GLESv2, EGL, and SDL2 development libraries in the build environment (or cross toolchain) so linking succeeds locally.

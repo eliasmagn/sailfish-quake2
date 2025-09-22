@@ -31,7 +31,15 @@
 
 #include <setjmp.h>
 
-#ifdef SAILFISHOS
+#ifdef ENABLE_TOUCH_OVERLAY
+#if defined(__has_include)
+#if __has_include(<mce/dbus-names.h>) && __has_include(<SDL2/src/core/linux/SDL_dbus.h>)
+#define Q2_HAS_SAILFISH_DBUS 1
+#endif
+#endif
+#endif
+
+#if defined(Q2_HAS_SAILFISH_DBUS)
 #include <mce/dbus-names.h>
 #include <SDL2/src/core/linux/SDL_dbus.h>
 #endif
@@ -466,10 +474,10 @@ void Qcommon_Run(int argc, char **argv)
 
 	int oldtime = Sys_Milliseconds();
 
-#ifdef SAILFISHOS
-	int second_time = oldtime;
-	SDL_DBusContext *context = SDL_DBus_GetContext();
-	SDL_DBus_CallVoidMethodOnConnection(context->system_conn, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF, MCE_PREVENT_BLANK_REQ, DBUS_TYPE_INVALID);
+#if defined(Q2_HAS_SAILFISH_DBUS)
+        int second_time = oldtime;
+        SDL_DBusContext *context = SDL_DBus_GetContext();
+        SDL_DBus_CallVoidMethodOnConnection(context->system_conn, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF, MCE_PREVENT_BLANK_REQ, DBUS_TYPE_INVALID);
 #endif
 
 	/* The legendary Quake II mainloop */
@@ -477,8 +485,8 @@ void Qcommon_Run(int argc, char **argv)
 	{
 		if (sdlwIsExitRequested()) 
 		{
-#ifdef SAILFISHOS
-			SDL_DBus_CallVoidMethodOnConnection(context->system_conn, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF, MCE_CANCEL_PREVENT_BLANK_REQ, DBUS_TYPE_INVALID);
+#if defined(Q2_HAS_SAILFISH_DBUS)
+                        SDL_DBus_CallVoidMethodOnConnection(context->system_conn, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF, MCE_CANCEL_PREVENT_BLANK_REQ, DBUS_TYPE_INVALID);
 #endif
 			Com_Quit();
 		}
@@ -495,12 +503,12 @@ void Qcommon_Run(int argc, char **argv)
 		Qcommon_Frame(time);
 		oldtime = newtime;
 
-#ifdef SAILFISHOS
-		if( newtime - second_time >= 60*1000 ) {
-			second_time = oldtime;
-			// printf("Call if(%s) %s;\n", MCE_REQUEST_IF, MCE_PREVENT_BLANK_REQ);
-			SDL_DBus_CallVoidMethodOnConnection(context->system_conn, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF, MCE_PREVENT_BLANK_REQ, DBUS_TYPE_INVALID);
-		}
+#if defined(Q2_HAS_SAILFISH_DBUS)
+                if( newtime - second_time >= 60*1000 ) {
+                        second_time = oldtime;
+                        // printf("Call if(%s) %s;\n", MCE_REQUEST_IF, MCE_PREVENT_BLANK_REQ);
+                        SDL_DBus_CallVoidMethodOnConnection(context->system_conn, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF, MCE_PREVENT_BLANK_REQ, DBUS_TYPE_INVALID);
+                }
 #endif
 	}
 }

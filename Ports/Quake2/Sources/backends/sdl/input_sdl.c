@@ -1232,12 +1232,23 @@ void IN_Init()
 	input_lookstrafe = Cvar_Get("input_lookstrafe", "0", CVAR_ARCHIVE);
 	input_lookspring = Cvar_Get("input_lookspring", "0", CVAR_ARCHIVE);
 
-	in_touch_overlay = Cvar_Get("in_touch_overlay", "0", CVAR_ARCHIVE);
-	{
-		const char *touch_env = getenv("QUAKE2_TOUCH_OVERLAY");
-		if (touch_env && touch_env[0] && strcmp(touch_env, "0") != 0)
-			Cvar_Set("in_touch_overlay", "1");
-	}
+        in_touch_overlay = Cvar_Get("in_touch_overlay", "0", CVAR_ARCHIVE);
+        {
+                const char *touch_env = getenv("QUAKE2_TOUCH_OVERLAY");
+                qboolean overlay_env_forced = false;
+                if (touch_env && touch_env[0] && strcmp(touch_env, "0") != 0)
+                {
+                        Cvar_Set("in_touch_overlay", "1");
+                        overlay_env_forced = true;
+                }
+#ifdef ENABLE_TOUCH_OVERLAY
+                if (!overlay_env_forced && in_touch_overlay->value == 0.0f)
+                {
+                        if (SDL_GetNumTouchDevices() > 0)
+                                Cvar_Set("in_touch_overlay", "1");
+                }
+#endif
+        }
 
 	mouse_windowed = Cvar_Get("mouse_windowed", GL_WINDOWED_MOUSE_DEFAULT_STRING, CVAR_USERINFO | CVAR_ARCHIVE);
 	mouse_pitch_inverted = Cvar_Get("mouse_pitch_inverted", "0", CVAR_ARCHIVE);

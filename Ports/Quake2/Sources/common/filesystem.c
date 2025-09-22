@@ -32,12 +32,6 @@
 #include "unzip/unzip.h"
 #endif
 
-#ifdef SAILFISHOS
-#include <unistd.h>
-#include <sys/types.h>
-#include <pwd.h>
-#endif
-
 #define MAX_HANDLES 512
 #define MAX_PAKS 100
 
@@ -998,19 +992,9 @@ static void FS_AddGameDirectories(const char * dir)
 	Com_sprintf(fs_gamedir, sizeof(fs_gamedir), "%s/%s", fs_basedir->string, dir);
 	printf("Game path: %s\n", fs_basedir->string);
 
-#ifdef SAILFISHOS
-	{
-		Com_Printf("Add AuroraOS specific paths\n");
-		char *userhome = getenv("HOME");
-		FS_AddGameDirectory(va("/usr/share/ru.sashikknox.quake2/lib/%s", dir)); // here we are put baseq2/game.so
-		FS_AddGameDirectory(va("%s/Documents/Quake2/%s", userhome, dir)); // AuroraOS 
-		FS_AddGameDirectory(va("%s/.local/share/ru.sashikknox/quake2/%s", userhome, dir)); // home share data 
-	}
-#endif
-
-	{
-		char *home = Sys_GetHomeDir();
-		printf("Home path: %s\n", home);
+        {
+                char *home = Sys_GetHomeDir();
+                printf("Home path: %s\n", home);
 		if (home == NULL || home[0] == '\0')
 			Com_sprintf(fs_writableGamedir, sizeof(fs_writableGamedir), "%s/%s", fs_basedir->string, dir);
 		else

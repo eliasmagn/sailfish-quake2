@@ -8,6 +8,10 @@
 #include <common/shared/shared.h>
 #include <client/keyboard.h>
 
+#ifndef RESC
+#define RESC ""
+#endif
+
 #define VKB_RESOURCE_DIRECTORY "res"
 
 #define VB_S(n) (n * VB_SPACING)
@@ -46,6 +50,30 @@ static char **keybinding_map = NULL;
 unsigned client_state = Client_In_Invalid;
 VKB_Add_Command_Function vkb_AddCommand = NULL;
 boolean render_lock = bfalse;
+
+static qboolean vkbIsAbsolutePath(const char *path)
+{
+        if (path == NULL || path[0] == '\0')
+                return bfalse;
+        if (path[0] == '/' || path[0] == '\\')
+                return btrue;
+#ifdef _WIN32
+        if (((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z')) && path[1] == ':')
+                return btrue;
+#endif
+        return bfalse;
+}
+
+static qboolean vkbNeedsSeparator(const char *path)
+{
+        if (path == NULL)
+                return bfalse;
+        size_t len = strlen(path);
+        if (len == 0)
+                return bfalse;
+        char last = path[len - 1];
+        return last != '/' && last != '\\';
+}
 
 // sort by setting in Q2
 static const char *Action_Cmds[Total_Action] = {
@@ -178,9 +206,18 @@ void vkb_EnsureTexturePaths(void)
                         separator = "/";
         }
 
+        const char *resourceRoot = RESC;
+        if (resourceRoot == NULL || resourceRoot[0] == '\0')
+                resourceRoot = VKB_RESOURCE_DIRECTORY;
+        const qboolean absoluteRoot = vkbIsAbsolutePath(resourceRoot);
+        const char *rootSeparator = vkbNeedsSeparator(resourceRoot) ? "/" : "";
+
         for (int i = 0; i < VKB_TEX_COUNT; ++i)
         {
-                snprintf(vkbTexturePaths[i], sizeof(vkbTexturePaths[i]), "%s%s%s/%s", base, separator, VKB_RESOURCE_DIRECTORY, vkbTextureNames[i]);
+                if (absoluteRoot)
+                        snprintf(vkbTexturePaths[i], sizeof(vkbTexturePaths[i]), "%s%s%s", resourceRoot, rootSeparator, vkbTextureNames[i]);
+                else
+                        snprintf(vkbTexturePaths[i], sizeof(vkbTexturePaths[i]), "%s%s%s%s%s", base, separator, resourceRoot, rootSeparator, vkbTextureNames[i]);
                 Tex_Files[i] = vkbTexturePaths[i];
         }
 

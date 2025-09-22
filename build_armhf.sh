@@ -37,6 +37,80 @@ detect_package_manager() {
     fi
 }
 
+package_for() {
+    local pkg_manager=$1
+    local category=$2
+    local item=$3
+
+    case "${pkg_manager}" in
+        apt)
+            case "${category}" in
+                host)
+                    case "${item}" in
+                        make) echo make ;;
+                        *) echo "${item}" ;;
+                    esac ;;
+                cross)
+                    case "${item}" in
+                        gcc) echo gcc-arm-linux-gnueabihf ;;
+                        g++) echo g++-arm-linux-gnueabihf ;;
+                        ar|ranlib|strip) echo binutils-arm-linux-gnueabihf ;;
+                    esac ;;
+                pkgconfig)
+                    case "${item}" in
+                        dbus) echo libdbus-1-dev ;;
+                        pulse) echo libpulse-dev ;;
+                    esac ;;
+            esac ;;
+        dnf)
+            case "${category}" in
+                host)
+                    case "${item}" in
+                        make) echo make ;;
+                        autoconf) echo autoconf ;;
+                        automake) echo automake ;;
+                        libtool) echo libtool ;;
+                        cmake) echo cmake ;;
+                        pkg-config) echo pkgconf-pkg-config ;;
+                    esac ;;
+                cross)
+                    case "${item}" in
+                        gcc) echo arm-linux-gnueabihf-gcc ;;
+                        g++) echo arm-linux-gnueabihf-g++ ;;
+                        ar|ranlib|strip) echo arm-linux-gnueabihf-binutils ;;
+                    esac ;;
+                pkgconfig)
+                    case "${item}" in
+                        dbus) echo dbus-devel ;;
+                        pulse) echo pulseaudio-libs-devel ;;
+                    esac ;;
+            esac ;;
+        zypper)
+            case "${category}" in
+                host)
+                    case "${item}" in
+                        make) echo make ;;
+                        autoconf) echo autoconf ;;
+                        automake) echo automake ;;
+                        libtool) echo libtool ;;
+                        cmake) echo cmake ;;
+                        pkg-config) echo pkg-config ;;
+                    esac ;;
+                cross)
+                    case "${item}" in
+                        gcc) echo gcc-arm-linux-gnueabihf ;;
+                        g++) echo g++-arm-linux-gnueabihf ;;
+                        ar|ranlib|strip) echo binutils-arm-linux-gnueabihf ;;
+                    esac ;;
+                pkgconfig)
+                    case "${item}" in
+                        dbus) echo libdbus-1-devel ;;
+                        pulse) echo libpulse-devel ;;
+                    esac ;;
+            esac ;;
+    esac
+}
+
 prompt_for_install() {
     local response=${AUTO_INSTALL_DEPS:-}
     if [[ -n "${response}" ]]; then
@@ -109,86 +183,13 @@ maybe_install_packages() {
     esac
 }
 
-ensure_dependencies() {
-    local -a missing_commands=()
-    local -a missing_packages=()
+gather_missing_dependencies() {
+    local -n missing_commands=$1
+    local -n missing_packages=$2
+    local manager=$3
 
-    local manager
-    manager=$(detect_package_manager)
-
-    package_for() {
-        local pkg_manager=$1
-        local category=$2
-        local item=$3
-
-        case "${pkg_manager}" in
-            apt)
-                case "${category}" in
-                    host)
-                        case "${item}" in
-                            make) echo make ;;
-                            *) echo "${item}" ;;
-                        esac ;;
-                    cross)
-                        case "${item}" in
-                            gcc) echo gcc-arm-linux-gnueabihf ;;
-                            g++) echo g++-arm-linux-gnueabihf ;;
-                            ar|ranlib|strip) echo binutils-arm-linux-gnueabihf ;;
-                        esac ;;
-                    pkgconfig)
-                        case "${item}" in
-                            dbus) echo libdbus-1-dev ;;
-                            pulse) echo libpulse-dev ;;
-                        esac ;;
-                esac ;;
-            dnf)
-                case "${category}" in
-                    host)
-                        case "${item}" in
-                            make) echo make ;;
-                            autoconf) echo autoconf ;;
-                            automake) echo automake ;;
-                            libtool) echo libtool ;;
-                            cmake) echo cmake ;;
-                            pkg-config) echo pkgconf-pkg-config ;;
-                        esac ;;
-                    cross)
-                        case "${item}" in
-                            gcc) echo arm-linux-gnueabihf-gcc ;;
-                            g++) echo arm-linux-gnueabihf-g++ ;;
-                            ar|ranlib|strip) echo arm-linux-gnueabihf-binutils ;;
-                        esac ;;
-                    pkgconfig)
-                        case "${item}" in
-                            dbus) echo dbus-devel ;;
-                            pulse) echo pulseaudio-libs-devel ;;
-                        esac ;;
-                esac ;;
-            zypper)
-                case "${category}" in
-                    host)
-                        case "${item}" in
-                            make) echo make ;;
-                            autoconf) echo autoconf ;;
-                            automake) echo automake ;;
-                            libtool) echo libtool ;;
-                            cmake) echo cmake ;;
-                            pkg-config) echo pkg-config ;;
-                        esac ;;
-                    cross)
-                        case "${item}" in
-                            gcc) echo gcc-arm-linux-gnueabihf ;;
-                            g++) echo g++-arm-linux-gnueabihf ;;
-                            ar|ranlib|strip) echo binutils-arm-linux-gnueabihf ;;
-                        esac ;;
-                    pkgconfig)
-                        case "${item}" in
-                            dbus) echo libdbus-1-devel ;;
-                            pulse) echo libpulse-devel ;;
-                        esac ;;
-                esac ;;
-        esac
-    }
+    missing_commands=()
+    missing_packages=()
 
     declare -A command_to_package=(
         [cmake]=cmake
@@ -254,10 +255,6 @@ ensure_dependencies() {
         fi
     fi
 
-    if ((${#missing_commands[@]} > 0)); then
-        log "Missing required commands: ${missing_commands[*]}"
-    fi
-
     local -A unique_packages=()
     local -a deduped_packages=()
     for pkg in "${missing_packages[@]}"; do
@@ -267,7 +264,37 @@ ensure_dependencies() {
         fi
     done
 
-    maybe_install_packages deduped_packages
+    missing_packages=("${deduped_packages[@]}")
+}
+
+ensure_dependencies() {
+    local manager
+    manager=$(detect_package_manager)
+
+    local -a missing_commands=()
+    local -a missing_packages=()
+
+    gather_missing_dependencies missing_commands missing_packages "${manager}"
+
+    if ((${#missing_commands[@]} == 0)); then
+        return
+    fi
+
+    log "Missing required commands: ${missing_commands[*]}"
+    if ((${#missing_packages[@]})); then
+        log "Attempting to resolve packages: ${missing_packages[*]}"
+        maybe_install_packages missing_packages
+    fi
+
+    gather_missing_dependencies missing_commands missing_packages "${manager}"
+
+    if ((${#missing_commands[@]} == 0)); then
+        return
+    fi
+
+    log "The following commands are still unavailable after dependency checks: ${missing_commands[*]}"
+    log "Please install the missing dependencies manually and re-run the script."
+    exit 1
 }
 
 ensure_dependencies

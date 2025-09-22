@@ -30,6 +30,8 @@ The build expects SDL2, OpenGL ES 2.0, and zlib development headers to be availa
 
 If the link step reports missing libraries such as `-lGLESv2`, `-lEGL`, or `-lSDL2`, install the corresponding development packages (or point the build to your cross-compilation sysroot) before rerunning `make`.  The dependency check looks for the `dbus-1` and `libpulse` pkg-config modules and will suggest installing `libdbus-1-dev` and `libpulse-dev` when they are unavailable.
 
+When targeting framebuffer or Wayland-only environments without an X11 stack, the SDL2 CMake build now automatically defines `MESA_EGL_NO_X11_HEADERS` and `EGL_NO_X11`.  This mirrors the autotools configuration and prevents the Mesa EGL headers from trying to include `Xlib.h`, unblocking armhf builds that rely solely on the Sailfish SDK sysroot.
+
 ## Runtime Verification
 
 At runtime, setting `QUAKE2_TOUCH_OVERLAY=1` in the environment should trigger the virtual keyboard texture logging (e.g., `vkb_NewTexture2D`) and display the overlay on compatible hardware.  This behaviour requires deploying the freshly built binary onto the target device.

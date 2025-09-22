@@ -31,7 +31,7 @@
 
 #include <setjmp.h>
 
-#if defined(ENABLE_TOUCH_OVERLAY) && defined(SDL_VIDEO_DRIVER_WAYLAND)
+#ifdef ENABLE_TOUCH_OVERLAY
 #if defined(__has_include)
 #if __has_include(<mce/dbus-names.h>) && __has_include(<SDL2/src/core/linux/SDL_dbus.h>)
 #define Q2_HAS_SAILFISH_DBUS 1

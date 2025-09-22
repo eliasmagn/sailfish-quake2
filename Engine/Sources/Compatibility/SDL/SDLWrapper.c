@@ -192,7 +192,7 @@ bool sdlwCreateWindow(const char *windowName, int windowWidth, int windowHeight,
     windowPos = SDL_WINDOWPOS_UNDEFINED;
     flags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_FULLSCREEN;
 #endif
-    #if defined(ENABLE_TOUCH_OVERLAY) && defined(SDL_VIDEO_DRIVER_WAYLAND)
+    #ifdef ENABLE_TOUCH_OVERLAY
     #ifdef SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION
     SDL_SetHint(SDL_HINT_QTWAYLAND_CONTENT_ORIENTATION, "landscape");
     SDL_SetHint(SDL_HINT_QTWAYLAND_WINDOW_FLAGS, "OverridesSystemGestures");

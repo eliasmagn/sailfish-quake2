@@ -13,5 +13,6 @@
 - [x] Disable libogg's maintainer mode by default so release builds no longer depend on locally installed automake helpers.
 - [x] Include libogg's generated dependency files optionally so missing `.deps` directories do not abort incremental builds.
 - [x] Ensure the SDL home directory fallback duplicates its formatted path so overlay path switches free memory safely.
+- [x] Gracefully fall back to sysroot D-Bus headers when pkg-config metadata is missing during armhf builds.
 - [ ] Validate the GLES2 build on actual Sailfish OS hardware to confirm the runtime touch overlay visuals.
 - [ ] Provide GLESv2, EGL, and SDL2 development libraries in the build environment (or cross toolchain) so linking succeeds locally.

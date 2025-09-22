@@ -418,7 +418,28 @@ log "Resetting previous Quake II build outputs"
 rm -rf "${ROOT_DIR}/Ports/Quake2/Output"
 
 log "Collecting dependency cflags"
-DBUS_CFLAGS=$(pkg-config --cflags dbus-1)
+if ! DBUS_CFLAGS=$(pkg-config --cflags dbus-1 2>/dev/null); then
+    log "dbus-1.pc not found via pkg-config. Falling back to sysroot header search."
+    mapfile -t dbus_include_candidates < <(printf '%s\n' \
+        "${SYSROOT}/usr/include/dbus-1.0" \
+        "${SYSROOT}/usr/lib/${CROSS_TRIPLE}/dbus-1.0/include" \
+        "${SYSROOT}/usr/lib/dbus-1.0/include" \
+        "${SYSROOT}/lib/dbus-1.0/include")
+
+    DBUS_FALLBACK_CFLAGS=()
+    for dir in "${dbus_include_candidates[@]}"; do
+        if [[ -d "${dir}" ]]; then
+            DBUS_FALLBACK_CFLAGS+=("-I${dir}")
+        fi
+    done
+
+    if ((${#DBUS_FALLBACK_CFLAGS[@]} == 0)); then
+        log "Error: Unable to locate D-Bus headers in ${SYSROOT}. Install the target's libdbus development package and retry."
+        exit 1
+    fi
+
+    DBUS_CFLAGS="${DBUS_FALLBACK_CFLAGS[*]}"
+fi
 COMMON_FLAGS=("--sysroot=${SYSROOT}" "${DBUS_CFLAGS}" "-I${PREFIX_DIR}/include" "-I${SYSROOT}/usr/include" "-DRESC=\\\"${RESC_PATH}\\\"")
 COMMON_LDFLAGS=("--sysroot=${SYSROOT}" "-L${PREFIX_DIR}/lib" "-L${SYSROOT}/usr/lib/${CROSS_TRIPLE}" "-L${SYSROOT}/usr/lib" "-L${SYSROOT}/lib")
 

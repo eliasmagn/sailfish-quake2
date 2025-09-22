@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+DETECTED_ACLOCAL=""
 
 usage() {
     cat <<'USAGE'
@@ -227,6 +228,21 @@ ensure_dependencies() {
         fi
     done
 
+    local aclocal_candidate=""
+    for candidate in aclocal-1.16 aclocal; do
+        if command -v "${candidate}" >/dev/null 2>&1; then
+            aclocal_candidate="${candidate}"
+            break
+        fi
+    done
+
+    if [[ -z "${aclocal_candidate}" ]]; then
+        missing_commands+=("aclocal-1.16")
+        missing_packages+=("automake")
+    else
+        DETECTED_ACLOCAL="${aclocal_candidate}"
+    fi
+
     local -a cross_tools=(gcc g++ ar ranlib strip)
     declare -A cross_tool_packages=(
         [gcc]=gcc-arm-linux-gnueabihf
@@ -273,6 +289,11 @@ ensure_dependencies() {
 }
 
 ensure_dependencies
+
+if [[ -n "${DETECTED_ACLOCAL}" && -z "${ACLOCAL:-}" ]]; then
+    log "Using detected aclocal helper: ${DETECTED_ACLOCAL}"
+    export ACLOCAL="${DETECTED_ACLOCAL}"
+fi
 
 find_prefixed_tool() {
     local base=$1

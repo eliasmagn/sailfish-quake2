@@ -7,9 +7,21 @@ ifndef verbose
   SILENT = @
 endif
 
+ifndef sailfish_arch
+  sailfish_arch=armv7hl
+endif
+
 CC = gcc
 CXX = g++
 AR = ar
+
+ifeq ($(sailfish_arch),armv7hl)
+  ARCH += -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard
+else
+  ifeq ($(sailfish_arch),aarch64)
+    ARCH += -march=armv8-a
+  endif
+endif
 
 TOUCH_OVERLAY_DEFINE :=
 ifneq ($(strip $(ENABLE_TOUCH_OVERLAY)),)

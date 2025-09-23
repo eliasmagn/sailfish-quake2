@@ -87,6 +87,42 @@ static ScreenRect sr_mouse_look = {
 static ScreenRect sr_joystick = {
         0,0,0,0
 };
+
+static int sr_last_window_w = 0;
+static int sr_last_window_h = 0;
+#ifdef SAILFISH_FBO
+static float sr_last_fbo_scale = 0.0f;
+#endif
+
+static void ResetTouchOverlayRects(void)
+{
+        sr_mouse_look.x = 0;
+        sr_mouse_look.y = 0;
+        sr_mouse_look.w = 0;
+        sr_mouse_look.h = 0;
+
+        sr_joystick.x = 0;
+        sr_joystick.y = 0;
+        sr_joystick.w = 0;
+        sr_joystick.h = 0;
+
+        sr_last_window_w = 0;
+        sr_last_window_h = 0;
+#ifdef SAILFISH_FBO
+        sr_last_fbo_scale = 0.0f;
+#endif
+}
+
+static inline bool TouchOverlayRectsValidFor(int w, int h)
+{
+        if (sr_mouse_look.w == 0 || sr_last_window_w != w || sr_last_window_h != h)
+                return false;
+#ifdef SAILFISH_FBO
+        if (sr_last_fbo_scale != sdlwGetFboScale())
+                return false;
+#endif
+        return true;
+}
 bool is_PointInRect( float x, float y, ScreenRect *sr) {
         return sr->x <= (int)x && sr->y <= (int)y && sr->x + sr->w >= (int)x && sr->y + sr->h >= (int)y;
 }
@@ -144,18 +180,25 @@ void transformTouch( float *x, float *y ) {
 	// do not use portrait orientations
 	}
 
-	if(sr_mouse_look.w != 0)
-		return;
-	int half_width = w / 2;
-	sr_mouse_look.x = half_width + 1;
-	sr_mouse_look.y = 0;
-	sr_mouse_look.w = half_width;
-	sr_mouse_look.h = h;
+        if(!TouchOverlayRectsValidFor(w, h))
+        {
+                int half_width = w / 2;
+                sr_mouse_look.x = half_width + 1;
+                sr_mouse_look.y = 0;
+                sr_mouse_look.w = half_width;
+                sr_mouse_look.h = h;
 
-	sr_joystick.x = 0;
-        sr_joystick.y = 0;
-        sr_joystick.w = half_width;
-        sr_joystick.h = h;
+                sr_joystick.x = 0;
+                sr_joystick.y = 0;
+                sr_joystick.w = half_width;
+                sr_joystick.h = h;
+
+                sr_last_window_w = w;
+                sr_last_window_h = h;
+#ifdef SAILFISH_FBO
+                sr_last_fbo_scale = sdlwGetFboScale();
+#endif
+        }
 }
 
 #endif // ENABLE_TOUCH_OVERLAY
@@ -439,17 +482,24 @@ bool IN_processEvent(SDL_Event *event)
 	case SDL_WINDOWEVENT:
 		switch (event->window.event)
 		{
-		case SDL_WINDOWEVENT_CLOSE:
-			printf("Exit requested by the user (by closing the window).");
-			sdlwRequestExit(true);
-			break;
-		case SDL_WINDOWEVENT_RESIZED:
-//        case SDL_WINDOWEVENT_SIZE_CHANGED:
-			break;
-		case SDL_WINDOWEVENT_FOCUS_LOST:
-			cl_paused->value = 1;
-			Key_MarkAllUp();
-			break;
+                case SDL_WINDOWEVENT_CLOSE:
+                        printf("Exit requested by the user (by closing the window).");
+                        sdlwRequestExit(true);
+                        break;
+                case SDL_WINDOWEVENT_RESIZED:
+#ifdef ENABLE_TOUCH_OVERLAY
+                        ResetTouchOverlayRects();
+#endif
+                        break;
+                case SDL_WINDOWEVENT_SIZE_CHANGED:
+#ifdef ENABLE_TOUCH_OVERLAY
+                        ResetTouchOverlayRects();
+#endif
+                        break;
+                case SDL_WINDOWEVENT_FOCUS_LOST:
+                        cl_paused->value = 1;
+                        Key_MarkAllUp();
+                        break;
 		case SDL_WINDOWEVENT_FOCUS_GAINED:
 			cl_paused->value = 0;
 			break;
@@ -458,22 +508,23 @@ bool IN_processEvent(SDL_Event *event)
 #if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISH_FBO)
     case SDL_DISPLAYEVENT:
         if( event->display.event == SDL_DISPLAYEVENT_ORIENTATION ) {
+                        ResetTouchOverlayRects();
                         // skip non landscape orinetations
                         if( event->display.data1 == SDL_ORIENTATION_LANDSCAPE
                             || event->display.data1 == SDL_ORIENTATION_LANDSCAPE_FLIPPED )
-			{
-				sdlwSetRealOrientation((SDL_DisplayOrientation)event->display.data1);
-				#ifdef SAILFISH_FBO
+                        {
+                                sdlwSetRealOrientation((SDL_DisplayOrientation)event->display.data1);
+                                #ifdef SAILFISH_FBO
 				if( (int)(r_rotaterender->value) == 1 ) {
 					if( event->display.data1 == SDL_ORIENTATION_LANDSCAPE )
             			sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE_FLIPPED);
 					else
 						sdlwSetOrientation(SDL_ORIENTATION_LANDSCAPE);
 				}
-				else
-				#endif
-					sdlwSetOrientation((SDL_DisplayOrientation)event->display.data1);
-			}
+                                else
+                                #endif
+                                        sdlwSetOrientation((SDL_DisplayOrientation)event->display.data1);
+                        }
         }
         break;
 #endif
@@ -1075,11 +1126,28 @@ bool IN_processEvent(SDL_Event *event)
  */
 void IN_Update()
 {
-	sdlwCheckEvents();
+        sdlwCheckEvents();
 
-	// Grab and ungrab the mouse if the  console or the menu is opened.
-	bool want_grab = (r_fullscreen->value || input_grab->value == 1 || (input_grab->value == 2 && mouse_windowed->value));
-	In_Grab(want_grab);
+        // Grab and ungrab the mouse if the  console or the menu is opened.
+        bool want_grab = (r_fullscreen->value || input_grab->value == 1 || (input_grab->value == 2 && mouse_windowed->value));
+        In_Grab(want_grab);
+
+#if defined(ENABLE_TOUCH_OVERLAY) && defined(SAILFISH_FBO)
+        static float last_sizerender_value = -1.0f;
+        if (r_sizerender)
+        {
+                float current_value = r_sizerender->value;
+                if (last_sizerender_value < 0.0f)
+                {
+                        last_sizerender_value = current_value;
+                }
+                else if (current_value != last_sizerender_value)
+                {
+                        ResetTouchOverlayRects();
+                        last_sizerender_value = current_value;
+                }
+        }
+#endif
 }
 
 static float ComputeStickValue(float stickValue)
@@ -1263,12 +1331,16 @@ void IN_Move(usercmd_t *cmd)
 
 void IN_Init()
 {
-	Com_Printf("------- input initialization -------\n");
+        Com_Printf("------- input initialization -------\n");
 
-	l_mouseX = l_mouseY = 0;
+        l_mouseX = l_mouseY = 0;
 
-	input_grab = Cvar_Get("input_grab", "2", CVAR_ARCHIVE);
-	input_freelook = Cvar_Get("input_freelook", "1", CVAR_ARCHIVE);
+#ifdef ENABLE_TOUCH_OVERLAY
+        ResetTouchOverlayRects();
+#endif
+
+        input_grab = Cvar_Get("input_grab", "2", CVAR_ARCHIVE);
+        input_freelook = Cvar_Get("input_freelook", "1", CVAR_ARCHIVE);
 	input_lookstrafe = Cvar_Get("input_lookstrafe", "0", CVAR_ARCHIVE);
 	input_lookspring = Cvar_Get("input_lookspring", "0", CVAR_ARCHIVE);
 

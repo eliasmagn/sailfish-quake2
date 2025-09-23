@@ -92,13 +92,19 @@ bool is_PointInRect( float x, float y, ScreenRect *sr) {
 }
 // transform delta to FBO orientaton
 void transformDelta( float *dx, float *dy ) {
-	float tmp;
-	switch( sdlwCurrentOrientation() ) {
-	case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
-		tmp = *dy;
-		*dy = *dx;
-		*dx = -tmp;
-		break;
+        float tmp;
+        int w, h;
+
+        sdlwGetWindowSize(&w, &h);
+        *dx *= (float)w;
+        *dy *= (float)h;
+
+        switch( sdlwCurrentOrientation() ) {
+        case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
+                tmp = *dy;
+                *dy = *dx;
+                *dx = -tmp;
+                break;
 	default:
 	case SDL_ORIENTATION_LANDSCAPE:
 		tmp = *dy;
@@ -108,16 +114,20 @@ void transformDelta( float *dx, float *dy ) {
 	// do not use portrait orientations
 	}
 }
-// transform touch point to FBO orientation 
+// transform touch point to FBO orientation
 void transformTouch( float *x, float *y ) {
-	int w,h;
-	float tmp;
-	sdlwGetWindowSize(&w, &h);
-	switch( sdlwCurrentOrientation() ) {
-	case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
-		tmp = *y;
-		*y = *x;
-		*x = w - tmp;
+        int w,h;
+        float tmp;
+        sdlwGetWindowSize(&w, &h);
+
+        *x *= (float)w;
+        *y *= (float)h;
+
+        switch( sdlwCurrentOrientation() ) {
+        case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
+                tmp = *y;
+                *y = *x;
+                *x = w - tmp;
 		break;
 	default:
 	case SDL_ORIENTATION_LANDSCAPE:
@@ -580,10 +590,10 @@ bool IN_processEvent(SDL_Event *event)
 				if( fingers[i].pressed && event->tfinger.fingerId == fingers[i].finger_id ) {
 					fingers[i].x = event->tfinger.x;
 					fingers[i].y = event->tfinger.y;
-					if ( is_PointInRect(fingers[i].press_x, fingers[i].press_y, &sr_mouse_look) ) {
-						l_mouseX += event->tfinger.dx * 2.0;
-						l_mouseY += event->tfinger.dy * 2.0;
-					}
+                                        if ( is_PointInRect(fingers[i].press_x, fingers[i].press_y, &sr_mouse_look) ) {
+                                                l_mouseX += event->tfinger.dx;
+                                                l_mouseY += event->tfinger.dy;
+                                        }
 					break;
 				}
 			}

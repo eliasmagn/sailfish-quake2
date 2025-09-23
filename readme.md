@@ -57,3 +57,15 @@ When those taps are injected into the GL virtual keyboard layer, the backend now
 Those joystick and look rectangles are now invalidated whenever the window is resized, the device orientation flips, or the Sailfish FBO scale changes.  The next touch event rebuilds the regions against the live window metrics, keeping finger classification synchronised with the rendered overlay even after dynamic resolution switches or display rotations.
 
 When SDL refuses to open a detected game controller, the input backend now logs the failure with the `SDL_GetError()` message rather than handing a `NULL` pointer to `SDL_GameControllerName`.  The hot-unplug close path mirrors that guard so unexpected device enumeration blips write an informative diagnostic line instead of crashing inside the formatter.
+
+## Roadmap (Ablauforientiert)
+
+1. **Bestehende Builds stabilisieren** – Die jüngsten GLES2-Änderungen auf realer Sailfish-Hardware verifizieren und fehlende Grafik-/SDL-Entwicklungsbibliotheken in den Build-Umgebungen hinterlegen, damit Releases und Cross-Builds reproduzierbar laufen.
+2. **Build-Tooling dokumentieren** – Schritt-für-Schritt-Anleitungen für `build_rpm.sh` und `build_armhf.sh` ergänzen, damit Maintainer die bereitgestellten Automatisierungsskripte ohne Vorkenntnisse einsetzen können.
+3. **Touch-Eingabe vervollständigen** – Eine Bildschirmtastatur in das Overlay integrieren und optionale Auto-Aiming-/Modifikator-Funktionen bereitstellen, um Touch- und Controller-Steuerung zu verbessern.
+4. **Rendering-Pfade modernisieren** – Die GLES2-Pipeline weiter optimieren (Pufferverwaltung, Shader-Pfade, Frame-Interpolation), damit mobile Geräte von stabileren Framerates profitieren.
+5. **Builds automatisieren** – Eine wiederholbare CI-Pipeline aufsetzen, die Cross-Builds, Paketprüfungen und Smoke-Tests orchestriert und die lokalen Skripte nutzt.
+6. **Overlay-Erlebnis erweitern** – Layout-Presets, Skalierungen und Konfigurationsprofile für unterschiedliche Displaygrößen anbieten, damit Nutzer das Overlay schnell anpassen können.
+7. **Portierungsgrad ausbauen** – Weitere Zielplattformen (z. B. 64-Bit-ARM, Wayland-first Builds) in die Premake-Projekte einpflegen und sicherstellen, dass benötigte Artefakte im Sailfish-Ökosystem ausgeliefert werden.
+8. **Abhängigkeiten pflegen** – Die gebündelten Third-Party-Bibliotheken aktualisieren und einen Prozess etablieren, der Sicherheitsfixes zeitnah in Builds und Pakete übernimmt.
+9. **QA-Feedbackschleifen etablieren** – Regelmäßige Beta-Builds und Hardware-Tests veröffentlichen, um Regressionen in Touch-Steuerung und Rendering frühzeitig zu entdecken und in zukünftigen Iterationen zu berücksichtigen.

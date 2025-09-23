@@ -14,6 +14,7 @@
 - [x] Include libogg's generated dependency files optionally so missing `.deps` directories do not abort incremental builds.
 - [x] Ensure the SDL home directory fallback duplicates its formatted path so overlay path switches free memory safely.
 - [x] Seed the SDL wrapper's Sailfish FBO scaling with `SAILFISH_FBO_DEFAULT_SCALE` whenever a context is created so overlay coordinates remain stable.
+- [x] Align the touch overlay finger coordinates and motion deltas with window pixel space before the Sailfish FBO orientation transforms so virtual controls respond again.
 - [x] Gracefully fall back to sysroot D-Bus headers when pkg-config metadata is missing during armhf builds, staging host copies into the sysroot when necessary.
 - [x] Stamp the SailfishOS Premake makefiles with hard-float ARM tuning so glibc no longer requests the soft-float stubs headers during cross-builds.
 - [ ] Validate the GLES2 build on actual Sailfish OS hardware to confirm the runtime touch overlay visuals.

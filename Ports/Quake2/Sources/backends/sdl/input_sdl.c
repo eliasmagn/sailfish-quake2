@@ -931,16 +931,17 @@ bool IN_processEvent(SDL_Event *event)
                                         l_controller = NULL;
                                 }
                                 l_controller = SDL_GameControllerOpen(event->jdevice.which);
-                                if (l_controller) {
-                                        const char *controller_name = SDL_GameControllerName(l_controller);
-                                        if (controller_name) {
-                                                Com_Printf("JoyEvent: SDL_CONTROLLERADDED %s\n", controller_name);
-                                        } else {
-                                                Com_Printf("JoyEvent: SDL_CONTROLLERADDED <unnamed>\n");
-                                        }
-                                } else {
+                                if (!l_controller) {
                                         Com_Printf("JoyEvent: Failed to open game controller %i: %s\n",
                                                 event->jdevice.which, SDL_GetError());
+                                        break;
+                                }
+
+                                const char *controller_name = SDL_GameControllerName(l_controller);
+                                if (controller_name) {
+                                        Com_Printf("JoyEvent: SDL_CONTROLLERADDED %s\n", controller_name);
+                                } else {
+                                        Com_Printf("JoyEvent: SDL_CONTROLLERADDED <unnamed>\n");
                                 }
                         } else {
                                 l_joystick = SDL_JoystickOpen(event->jdevice.which);

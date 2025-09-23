@@ -94,10 +94,13 @@ bool is_PointInRect( float x, float y, ScreenRect *sr) {
 void transformDelta( float *dx, float *dy ) {
         float tmp;
         int w, h;
+        float width, height;
 
         sdlwGetWindowSize(&w, &h);
-        *dx *= (float)w;
-        *dy *= (float)h;
+        width = (float)w;
+        height = (float)h;
+        *dx *= width;
+        *dy *= height;
 
         switch( sdlwCurrentOrientation() ) {
         case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
@@ -118,23 +121,26 @@ void transformDelta( float *dx, float *dy ) {
 void transformTouch( float *x, float *y ) {
         int w,h;
         float tmp;
+        float width, height;
         sdlwGetWindowSize(&w, &h);
 
-        *x *= (float)w;
-        *y *= (float)h;
+        width = (float)w;
+        height = (float)h;
+        *x *= width;
+        *y *= height;
 
         switch( sdlwCurrentOrientation() ) {
         case SDL_ORIENTATION_LANDSCAPE_FLIPPED:
                 tmp = *y;
                 *y = *x;
-                *x = w - tmp;
-		break;
-	default:
-	case SDL_ORIENTATION_LANDSCAPE:
-		tmp = *y;
-		*y = h - *x;
-		*x = tmp;
-		break;
+                *x = width - tmp;
+                break;
+        default:
+        case SDL_ORIENTATION_LANDSCAPE:
+                tmp = *y;
+                *y = height - *x;
+                *x = tmp;
+                break;
 	// do not use portrait orientations
 	}
 
@@ -542,8 +548,7 @@ bool IN_processEvent(SDL_Event *event)
 					fingers[i].pressed = true;
 					fingers[i].wait_double_tap = false; 
 					#ifdef SAILFISH_FBO
-					float scale = sdlwGetFboScale();
-					vkb_GLVKBMouseEvent(K_MOUSE1, btrue,event->tfinger.x * scale, event->tfinger.y * scale,  vkb_HandleVKBAction);
+					vkb_GLVKBMouseEvent(K_MOUSE1, btrue, (int)event->tfinger.x, (int)event->tfinger.y, vkb_HandleVKBAction);
 					#endif
 					break;
 				}
@@ -561,8 +566,7 @@ bool IN_processEvent(SDL_Event *event)
 					// if( is_PointInRect(fingers[i].press_x, fingers[i].press_y, &sr_joystick) ) {
 					// }
 					#ifdef SAILFISH_FBO
-					float scale = sdlwGetFboScale();
-					vkb_GLVKBMouseEvent(K_MOUSE1, bfalse, event->tfinger.x * scale, event->tfinger.y * scale,  vkb_HandleVKBAction);
+					vkb_GLVKBMouseEvent(K_MOUSE1, bfalse, (int)event->tfinger.x, (int)event->tfinger.y,  vkb_HandleVKBAction);
 					#endif
 					fingers[i].x = 0;
 					fingers[i].y = 0;

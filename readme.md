@@ -45,3 +45,5 @@ When targeting framebuffer or Wayland-only environments without an X11 stack, th
 At runtime, setting `QUAKE2_TOUCH_OVERLAY=1` in the environment should trigger the virtual keyboard texture logging (e.g., `vkb_NewTexture2D`) and display the overlay on compatible hardware.  This behaviour requires deploying the freshly built binary onto the target device.
 
 The SDL backend now duplicates the fallback `$HOME/.local/share/...` path when SDL's preferred directory helpers are unavailable, so switching the overlay path frees only heap allocations and avoids dangling pointers to temporary buffers.  This prevents crashes when repeatedly toggling the touch overlay configuration during testing.
+
+On Sailfish builds that render through an off-screen framebuffer object, the SDL wrapper now initialises `fbo_scale` with `SAILFISH_FBO_DEFAULT_SCALE` as soon as a context is created.  This keeps the touch overlay's coordinate scaling in sync with the compositor even if SDL initialisation bails out early and retries, eliminating the erratic cursor drift previously observed on first launch after a failed init.

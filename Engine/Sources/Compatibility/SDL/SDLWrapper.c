@@ -119,10 +119,13 @@ bool sdlwInitialize(SdlProcessEventFunction processEvent, Uint32 flags) {
 	sdlwContext = sdlw;
     sdlw->exitRequested = false;
     sdlw->defaultEventManagementEnabled = true;
-	sdlw->processEvent = processEvent;
+    sdlw->processEvent = processEvent;
     sdlw->window = NULL;
     sdlw->windowWidth = 0;
     sdlw->windowHeight = 0;
+#ifdef SAILFISH_FBO
+    sdlw->fbo_scale = SAILFISH_FBO_DEFAULT_SCALE;
+#endif
 #ifdef ENABLE_TOUCH_OVERLAY
     sdlw->orientation = SDL_ORIENTATION_LANDSCAPE;
     sdlw->real_orientation = SDL_ORIENTATION_LANDSCAPE;

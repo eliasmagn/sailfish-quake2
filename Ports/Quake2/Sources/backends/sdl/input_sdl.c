@@ -598,9 +598,12 @@ bool IN_processEvent(SDL_Event *event)
 					fingers[i].timestamp = event->tfinger.timestamp;
 					fingers[i].pressed = true;
 					fingers[i].wait_double_tap = false; 
-					#ifdef SAILFISH_FBO
-					vkb_GLVKBMouseEvent(K_MOUSE1, btrue, (int)event->tfinger.x, (int)event->tfinger.y, vkb_HandleVKBAction);
-					#endif
+                                        #ifdef SAILFISH_FBO
+                                        float fbo_scale = sdlwGetFboScale();
+                                        int fbo_x = (int)(event->tfinger.x * fbo_scale);
+                                        int fbo_y = (int)(event->tfinger.y * fbo_scale);
+                                        vkb_GLVKBMouseEvent(K_MOUSE1, btrue, fbo_x, fbo_y, vkb_HandleVKBAction);
+                                        #endif
 					break;
 				}
 			}
@@ -616,9 +619,12 @@ bool IN_processEvent(SDL_Event *event)
 				if( fingers[i].finger_id == event->tfinger.fingerId ){
 					// if( is_PointInRect(fingers[i].press_x, fingers[i].press_y, &sr_joystick) ) {
 					// }
-					#ifdef SAILFISH_FBO
-					vkb_GLVKBMouseEvent(K_MOUSE1, bfalse, (int)event->tfinger.x, (int)event->tfinger.y,  vkb_HandleVKBAction);
-					#endif
+                                        #ifdef SAILFISH_FBO
+                                        float fbo_scale = sdlwGetFboScale();
+                                        int fbo_x = (int)(event->tfinger.x * fbo_scale);
+                                        int fbo_y = (int)(event->tfinger.y * fbo_scale);
+                                        vkb_GLVKBMouseEvent(K_MOUSE1, bfalse, fbo_x, fbo_y,  vkb_HandleVKBAction);
+                                        #endif
 					fingers[i].x = 0;
 					fingers[i].y = 0;
 					fingers[i].press_x = 0;

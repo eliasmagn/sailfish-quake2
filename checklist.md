@@ -16,6 +16,7 @@
 - [x] Seed the SDL wrapper's Sailfish FBO scaling with `SAILFISH_FBO_DEFAULT_SCALE` whenever a context is created so overlay coordinates remain stable.
 - [x] Match Sailfish FBO depth texture dimensions to the scaled framebuffer size by feeding the scaled height into `glTexImage2D`, keeping completeness checks passing with non-square targets.
 - [x] Align the touch overlay finger coordinates and motion deltas with window pixel space before the Sailfish FBO orientation transforms so virtual controls respond again, and forward those pixel taps straight into the Sailfish virtual keyboard hit-tests.
+- [x] Map Sailfish virtual keyboard touch injections through the active FBO scale so overlay buttons register reliably across the downscaled render target.
 - [x] Recompute the touch overlay joystick/look regions after window, orientation, or Sailfish FBO scaling changes so finger zones keep matching the rendered controls.
 - [x] Harden SDL game controller logging so null handles emit descriptive errors instead of crashing the formatter when hot-plugging fails.
 - [x] Short-circuit controller hot-plug handling when `SDL_GameControllerOpen` fails and guard name lookups behind a valid handle check.

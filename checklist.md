@@ -24,6 +24,7 @@
 - [x] Short-circuit controller hot-plug handling when `SDL_GameControllerOpen` fails and guard name lookups behind a valid handle check.
 - [x] Gracefully fall back to sysroot D-Bus headers when pkg-config metadata is missing during armhf builds, staging host copies into the sysroot when necessary.
 - [x] Stamp the SailfishOS Premake makefiles with hard-float ARM tuning so glibc no longer requests the soft-float stubs headers during cross-builds.
+- [x] Replace the Sailfish touch overlay mock-up code with a GLES2 shader/VBO pipeline that runs on device hardware.
 
 ## Offene Schritte (Roadmap-Reihenfolge)
 

@@ -2,6 +2,8 @@
 
 This repository contains build system outputs and dependencies for the Sailfish OS port of Quake II.  The GLES2 makefiles under `Ports/Quake2/Premake` have been updated so the virtual touch overlay is compiled in by default, eliminating the need to export extra environment variables when preparing release or debug binaries.  The armhf helper script has also been modernised so it can locate version-suffixed cross-compilers (for example `arm-linux-gnueabihf-gcc-10`) without additional configuration and will now check for required build dependencies before the compilation steps begin.
 
+The touch overlay rendering path now uses the real GLES2 shader pipeline rather than the desktop GL mock-up that previously lived behind `FIX_GLESv2`.  Vertex and texture coordinate data for buttons, joysticks, swipes, and cursors are uploaded into dedicated buffers, and the renderer binds them directly through programmable pipeline attributes.  Runtime draws simply update a translation uniform per control and issue `glDrawArrays` calls, so the code works unchanged on Sailfish devices without depending on removed fixed-function entry points.
+
 ## Building the GLES2 Client
 
 To build everything (SDL2, libogg, and the game targets) for armhf in one pass, execute the helper script:

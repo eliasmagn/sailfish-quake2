@@ -22,6 +22,9 @@
 - [x] Recompute the touch overlay joystick/look regions after window, orientation, or Sailfish FBO scaling changes so finger zones keep matching the rendered controls.
 - [x] Harden SDL game controller logging so null handles emit descriptive errors instead of crashing the formatter when hot-plugging fails.
 - [x] Short-circuit controller hot-plug handling when `SDL_GameControllerOpen` fails and guard name lookups behind a valid handle check.
+- [x] Abort the Quake II startup sequence when `sdlwInitialize` reports an SDL failure so the engine never runs without audio or video devices.
+- [x] Search both the portable `res/` tree and `/usr/share/harbour-quake2` for `gamecontrollerdb.txt` so packaged controller mappings load on Sailfish builds.
+- [x] Compare controller instance identifiers (and log joystick handles with `%p`) when reacting to `SDL_JOYDEVICEADDED` so hot-plugging closes only the correct devices on 64-bit targets.
 - [x] Gracefully fall back to sysroot D-Bus headers when pkg-config metadata is missing during armhf builds, staging host copies into the sysroot when necessary.
 - [x] Stamp the SailfishOS Premake makefiles with hard-float ARM tuning so glibc no longer requests the soft-float stubs headers during cross-builds.
 - [x] Replace the Sailfish touch overlay mock-up code with a GLES2 shader/VBO pipeline that runs on device hardware.

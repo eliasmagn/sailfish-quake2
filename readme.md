@@ -60,6 +60,8 @@ Those joystick and look rectangles are now invalidated whenever the window is re
 
 When SDL refuses to open a detected game controller, the input backend now logs the failure with the `SDL_GetError()` message rather than handing a `NULL` pointer to `SDL_GameControllerName`.  The hot-unplug close path mirrors that guard so unexpected device enumeration blips write an informative diagnostic line instead of crashing inside the formatter.
 
+Startup safety has also improved: `Qcommon_Init` now exits immediately when the SDL wrapper reports an initialisation failure so broken audio/video setups never leave the game in a half-running state.  The wrapper probes both the portable `res/gamecontrollerdb.txt` and the Sailfish data installation (`/usr/share/harbour-quake2/gamecontrollerdb.txt`) so the packaged controller mappings actually load on device builds.  Controller hot-plugging now compares instance identifiers (instead of device indices) and logs joystick handles with `%p`, ensuring the correct device is closed and reopened across 32-bit and 64-bit targets alike.
+
 ## Roadmap (Ablauforientiert)
 
 1. **Bestehende Builds stabilisieren** – Die jüngsten GLES2-Änderungen auf realer Sailfish-Hardware verifizieren und fehlende Grafik-/SDL-Entwicklungsbibliotheken in den Build-Umgebungen hinterlegen, damit Releases und Cross-Builds reproduzierbar laufen.

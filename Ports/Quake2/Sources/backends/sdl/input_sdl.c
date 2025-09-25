@@ -912,49 +912,106 @@ bool IN_processEvent(SDL_Event *event)
 	case SDL_CONTROLLERDEVICEADDED:
 		Com_Printf("JoyEvent: SDL_CONTROLLERDEVICEADDED %i \n", event->cdevice.which);
 		break;
-	case SDL_JOYDEVICEADDED:         /**< A new joystick has been inserted into the system */
-		Com_Printf("JoyEvent: Try handle %i joystick\n", event->jdevice.which);
-                if (NULL == l_controller) {
-                        if (l_joystick) {
-                                Com_Printf("JoyEvent: Close Joystick: %d\n", l_joystick);
+        case SDL_JOYDEVICEADDED:         /**< A new joystick has been inserted into the system */
+        {
+                SDL_JoystickID instance = SDL_JoystickGetDeviceInstanceID(event->jdevice.which);
+                if (instance < 0)
+                {
+                        Com_Printf("JoyEvent: Failed to query joystick instance id for device %i: %s\n",
+                                event->jdevice.which, SDL_GetError());
+                        break;
+                }
+
+                Com_Printf("JoyEvent: Try handle %i joystick\n", event->jdevice.which);
+
+                if (SDL_IsGameController(event->jdevice.which))
+                {
+                        if (l_joystick)
+                        {
+                                Com_Printf("JoyEvent: Close joystick handle %p in favour of controller %i\n",
+                                        (void *)l_joystick, event->jdevice.which);
                                 SDL_JoystickClose(l_joystick);
                                 l_joystick = NULL;
                         }
-                        // Com_Printf("Could not open gamecontroller %i: %s\n", i, SDL_GetError());
-                        if (SDL_IsGameController(event->jdevice.which)) {
-                                if (l_controller != SDL_GameControllerFromInstanceID(event->jdevice.which)) {
-                                        if (l_controller) {
-                                                const char *controller_name = SDL_GameControllerName(l_controller);
-                                                if (controller_name) {
-                                                        Com_Printf("JoyEvent: Close controller: %s \n", controller_name);
-                                                } else {
-                                                        Com_Printf("JoyEvent: Close controller: <unnamed>\n");
-                                                }
-                                                SDL_GameControllerClose(l_controller);
-                                        } else {
-                                                Com_Printf("JoyEvent: Close controller: (no active handle) %s\n", SDL_GetError());
-                                        }
-                                        l_controller = NULL;
-                                }
-                                l_controller = SDL_GameControllerOpen(event->jdevice.which);
-                                if (!l_controller) {
-                                        Com_Printf("JoyEvent: Failed to open game controller %i: %s\n",
-                                                event->jdevice.which, SDL_GetError());
+
+                        if (l_controller)
+                        {
+                                SDL_Joystick *controllerJoystick = SDL_GameControllerGetJoystick(l_controller);
+                                if (controllerJoystick && SDL_JoystickInstanceID(controllerJoystick) == instance)
+                                {
                                         break;
                                 }
 
                                 const char *controller_name = SDL_GameControllerName(l_controller);
-                                if (controller_name) {
-                                        Com_Printf("JoyEvent: SDL_CONTROLLERADDED %s\n", controller_name);
-                                } else {
-                                        Com_Printf("JoyEvent: SDL_CONTROLLERADDED <unnamed>\n");
+                                if (controller_name)
+                                {
+                                        Com_Printf("JoyEvent: Close controller: %s\n", controller_name);
                                 }
-                        } else {
-                                l_joystick = SDL_JoystickOpen(event->jdevice.which);
-                                Com_Printf("JoyEvent: SDL_JOYDEVICEADDED %i : %d\n", event->jdevice.which, l_joystick);
+                                else
+                                {
+                                        Com_Printf("JoyEvent: Close controller: <unnamed>\n");
+                                }
+                                SDL_GameControllerClose(l_controller);
+                                l_controller = NULL;
+                        }
+
+                        l_controller = SDL_GameControllerOpen(event->jdevice.which);
+                        if (!l_controller)
+                        {
+                                Com_Printf("JoyEvent: Failed to open game controller %i: %s\n",
+                                        event->jdevice.which, SDL_GetError());
+                                break;
+                        }
+
+                        const char *controller_name = SDL_GameControllerName(l_controller);
+                        if (controller_name)
+                        {
+                                Com_Printf("JoyEvent: SDL_CONTROLLERADDED %s\n", controller_name);
+                        }
+                        else
+                        {
+                                Com_Printf("JoyEvent: SDL_CONTROLLERADDED <unnamed>\n");
                         }
                 }
-		break;
+                else
+                {
+                        if (l_controller)
+                        {
+                                const char *controller_name = SDL_GameControllerName(l_controller);
+                                if (controller_name)
+                                {
+                                        Com_Printf("JoyEvent: Close controller: %s\n", controller_name);
+                                }
+                                else
+                                {
+                                        Com_Printf("JoyEvent: Close controller: <unnamed>\n");
+                                }
+                                SDL_GameControllerClose(l_controller);
+                                l_controller = NULL;
+                        }
+
+                        if (l_joystick)
+                        {
+                                if (SDL_JoystickInstanceID(l_joystick) == instance)
+                                        break;
+
+                                Com_Printf("JoyEvent: Close joystick handle %p\n", (void *)l_joystick);
+                                SDL_JoystickClose(l_joystick);
+                                l_joystick = NULL;
+                        }
+
+                        l_joystick = SDL_JoystickOpen(event->jdevice.which);
+                        if (!l_joystick)
+                        {
+                                Com_Printf("JoyEvent: Failed to open joystick %i: %s\n",
+                                        event->jdevice.which, SDL_GetError());
+                                break;
+                        }
+
+                        Com_Printf("JoyEvent: SDL_JOYDEVICEADDED %i : %p\n", event->jdevice.which, (void *)l_joystick);
+                }
+                break;
+        }
 	case SDL_JOYDEVICEREMOVED:
 		Com_Printf("JoyEvent: SDL_JOYDEVICEREMOVED\n");
 		if (l_joystick) {

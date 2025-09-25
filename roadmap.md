@@ -2,6 +2,7 @@
 
 ## Completed Milestones
 - Swapped the Sailfish touch overlay mock-up for a GLES2 shader/VBO renderer that ships on device builds.
+- Hardened the SDL bootstrap by aborting on initialisation failures, loading controller mappings from the Sailfish data install, and fixing hot-plug logic to use proper instance identifiers.
 
 ## Near-Term Priorities
 1. Validate the refreshed GLES2 overlay on Sailfish OS hardware to confirm input hit boxes and rendering alignment.

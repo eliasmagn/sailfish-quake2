@@ -204,9 +204,12 @@ static void Qcommon_Init(int argc, char **argv)
 
 	z_chain.next = z_chain.prev = &z_chain;
 
-	extern bool IN_processEvent(SDL_Event *event);
-	sdlwInitialize(IN_processEvent, 0);
-	sdlwEnableDefaultEventManagement(false);
+        extern bool IN_processEvent(SDL_Event *event);
+        if (sdlwInitialize(IN_processEvent, 0))
+        {
+                Sys_Error("Unable to initialize SDL (see log for details)\n");
+        }
+        sdlwEnableDefaultEventManagement(false);
 
 	/* prepare enough of the subsystems to handle
 	   cvar and command buffer management */

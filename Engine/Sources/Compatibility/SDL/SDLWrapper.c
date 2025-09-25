@@ -10,6 +10,20 @@ SdlwContext *sdlwContext = NULL;
 
 #define SDLW_MAX_PATH 1024
 
+static bool sdlwLoadControllerMappingsFrom(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+
+    const int result = SDL_GameControllerAddMappingsFromFile(path);
+    if (result >= 0)
+    {
+        printf("Load gamecontrollerdb : %i (%s)\n", result, path);
+        return true;
+    }
+    return false;
+}
+
 static void sdlwTryLoadControllerMappings(void)
 {
     static int attempted = 0;
@@ -29,19 +43,30 @@ static void sdlwTryLoadControllerMappings(void)
         char mappingPath[SDLW_MAX_PATH];
         mappingPath[0] = '\0';
         snprintf(mappingPath, sizeof(mappingPath), "%s%s%s", basePath, separator, relativePath);
-        const int result = SDL_GameControllerAddMappingsFromFile(mappingPath);
-        if (result >= 0)
+        if (sdlwLoadControllerMappingsFrom(mappingPath))
         {
-            printf("Load gamecontrollerdb : %i (%s)\n", result, mappingPath);
             SDL_free(basePath);
             return;
         }
         SDL_free(basePath);
     }
 
-    const int fallback = SDL_GameControllerAddMappingsFromFile(relativePath);
-    if (fallback >= 0)
-        printf("Load gamecontrollerdb : %i (%s)\n", fallback, relativePath);
+    if (sdlwLoadControllerMappingsFrom(relativePath))
+        return;
+
+    const char *const systemPaths[] = {
+#ifdef SDLW_CONTROLLERDB_PATH
+        SDLW_CONTROLLERDB_PATH,
+#endif
+        "/usr/share/harbour-quake2/gamecontrollerdb.txt",
+        "/usr/local/share/harbour-quake2/gamecontrollerdb.txt"
+    };
+
+    for (size_t i = 0; i < sizeof(systemPaths) / sizeof(systemPaths[0]); ++i)
+    {
+        if (sdlwLoadControllerMappingsFrom(systemPaths[i]))
+            return;
+    }
 }
 //SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER
 

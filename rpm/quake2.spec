@@ -143,7 +143,7 @@ mkdir -p %{buildroot}/usr/share/icons/hicolor/{86x86,108x108,128x128,172x172}/ap
 rsync -avP %{build_folder}/%{build_subfolder}/bin/quake2-gles2 %{buildroot}%{_bindir}/%{name}
 rsync -avP Engine/Sources/Compatibility/SDL/res %{buildroot}%{_datadir}/%{name}/
 chmod -R go-rw %{buildroot}%{_datadir}/%{name}/res
-rsync -avP spec/gamecontrollerdb.txt %{buildroot}%{_datadir}/%{name}/gamecontrollerdb.txt
+rsync -avP Engine/Sources/Compatibility/SDL/res/gamecontrollerdb.txt %{buildroot}%{_datadir}/%{name}/gamecontrollerdb.txt
 rsync -avP spec/harbour-quake2.desktop %{buildroot}%{_datadir}/applications/%{name}.desktop
 rsync -avP spec/Quake2_86.png %{buildroot}/usr/share/icons/hicolor/86x86/apps/%{name}.png
 rsync -avP spec/Quake2_108.png %{buildroot}/usr/share/icons/hicolor/108x108/apps/%{name}.png

@@ -28,6 +28,7 @@
 - [x] Gracefully fall back to sysroot D-Bus headers when pkg-config metadata is missing during armhf builds, staging host copies into the sysroot when necessary.
 - [x] Stamp the SailfishOS Premake makefiles with hard-float ARM tuning so glibc no longer requests the soft-float stubs headers during cross-builds.
 - [x] Replace the Sailfish touch overlay mock-up code with a GLES2 shader/VBO pipeline that runs on device hardware.
+- [x] Ship `gamecontrollerdb.txt` with the overlay resources so local builds load default controller mappings without packaging first.
 
 ## Offene Schritte (Roadmap-Reihenfolge)
 

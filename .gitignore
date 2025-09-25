@@ -12,3 +12,4 @@ SDL2-src
 build_rpm/*
 build_aurora_rpm/*
 libogg/*
+SDL2/android-project/.gradle/

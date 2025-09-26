@@ -4,43 +4,31 @@ This repository contains build system outputs and dependencies for the Sailfish 
 
 The touch overlay rendering path now uses the real GLES2 shader pipeline rather than the desktop GL mock-up that previously lived behind `FIX_GLESv2`.  Vertex and texture coordinate data for buttons, joysticks, swipes, and cursors are uploaded into dedicated buffers, and the renderer binds them directly through programmable pipeline attributes.  Runtime draws simply update a translation uniform per control and issue `glDrawArrays` calls, so the code works unchanged on Sailfish devices without depending on removed fixed-function entry points.
 
-## Building the GLES2 Client
+## Guided Build Walkthroughs
 
-To build everything (SDL2, libogg, and the game targets) for armhf in one pass, execute the helper script:
+### Cross-compiling with `build_armhf.sh`
 
-```bash
-./build_armhf.sh
-```
-
-The script automatically searches the `PATH` for the best matching `arm-linux-gnueabihf-*` binaries, even when toolchains are installed with explicit version suffixes.  You can still override the detected commands by setting `CROSS_CC`, `CROSS_CXX`, `CROSS_AR`, `CROSS_RANLIB`, or `CROSS_STRIP` before launching the script if you need a specific compiler revision.  Before any build directories are touched, the helper ensures that CMake, pkg-config, GNU autotools (including the unversioned `aclocal` helper supplied by `automake`), and the cross-compilation toolchain are present.  When it detects missing components it reports the absent commands and, when run on distributions with `apt`, `dnf`, or `zypper`, offers to install the corresponding packages automatically.  If you prefer to install prerequisites manually, make sure the host provides `cmake`, `pkg-config`, `autoconf`, `automake` (which ships both `automake` and `aclocal` binaries), and `libtool` alongside the `arm-linux-gnueabihf-*` cross-compilers.
-
-By default the helper stores intermediate build artefacts under `<repo>/build-armhf` but stages installed dependencies in `../sailfish-quake2-sysroot` so that a `git clean` or manual removal of the build directory does not wipe the sysroot.  You can point the helper at alternate locations either by passing `--build-dir` and `--staging-dir` on the command line or by exporting `ARMHF_BUILD_DIR` and `ARMHF_STAGING_DIR` (the legacy `ARMHF_SYSROOT_DIR` is still honoured).  Whenever overrides are detected the script prints the resolved directories, waits five seconds so you can abort if the paths look wrong, and then proceeds with the build while preserving any pre-existing contents in the custom staging area.
-
-When you need to compile against a pre-existing Sailfish SDK rootfs instead of the compiler-reported default, provide it via `--sysroot`, set `ARMHF_SYSROOT`, or export `SYSROOT` before running the helper.  The selected toolchain sysroot is surfaced alongside the detected compiler binaries so you can confirm the build is targeting the expected environment.
-
-To skip the interactive prompt during automated CI runs, export `AUTO_INSTALL_DEPS=y` (or `AUTO_INSTALL_DEPS=n` to decline).  The script will use `sudo` when necessary, so make sure the user invoking the build has the appropriate privileges or run the helper as root.
-
-To build the GLES2 client for armhf targets, run:
-
-```bash
-make -C Ports/Quake2/Premake/Build-Linux-armhf/gmake config=release quake2-gles2
-```
-
-For desktop Linux testing you can issue:
-
-```bash
-make -C Ports/Quake2/Premake/Build-Linux/gmake config=release quake2-gles2
-```
-
-The build expects SDL2, OpenGL ES 2.0, and zlib development headers to be available for the selected architecture.  Cross-compiling for armhf may require an appropriate toolchain and sysroot; the helper script uses the detected compiler's `-print-sysroot` output to set these paths automatically.
-
-When building through the SailfishOS-specific Premake outputs (`Ports/Quake2/Premake/Build-SailfishOS/gmake`), the generated makefiles now inject `-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard` for armv7hl targets (and `-march=armv8-a` for aarch64) so the GNU C Library consistently selects the hard-float stubs.  This matches the helper script's expectations and resolves compile failures that previously reported missing `gnu/stubs-soft.h` headers when cross-compiling for hard-float devices.
+1. **Install host prerequisites.** Ensure `cmake`, `pkg-config`, `autoconf`, `automake`, `libtool`, and an `arm-linux-gnueabihf-*` cross toolchain are available on your host.  On Debian/Ubuntu the helper can install any missing packages automatically when `sudo` is present; export `AUTO_INSTALL_DEPS=y` to skip the interactive confirmation during unattended runs.
+2. **Select build locations (optional).** By default the helper writes objects into `<repo>/build-armhf` and stages headers/libraries into `../sailfish-quake2-sysroot/usr`.  Override these paths with `--build-dir`, `--staging-dir`, or the `ARMHF_BUILD_DIR`/`ARMHF_STAGING_DIR` environment variables.  Provide `--sysroot`, `ARMHF_SYSROOT`, or `SYSROOT` when you must target a specific Sailfish SDK rootfs.
+3. **Run the helper.** Execute `./build_armhf.sh` from the repository root.  The script prints the resolved directories, waits five seconds so you can abort if they look wrong, detects `arm-linux-gnueabihf-*` binaries (including version-suffixed toolchains), and probes required build-time commands.  When dependencies are missing it lists them and offers to install the matching packages via `apt`, `dnf`, or `zypper` before proceeding.
+4. **Inspect staged outputs.** After SDL2, libogg, and supporting libraries have been built, the helper leaves its artefacts under the staging prefix.  Cross builds inherit sysroot hints from the detected toolchain, and pkg-config metadata is patched so the subsequent Premake projects see the staged headers and libraries.
+5. **Compile the GLES2 client.** Invoke `make -C Ports/Quake2/Premake/Build-Linux-armhf/gmake config=release quake2-gles2` to produce the armhf binary or switch to `Build-Linux/gmake` for a desktop verification build.  The SailfishOS-specific makefiles under `Build-SailfishOS/gmake` automatically append hard-float tuning flags for armv7hl and aarch64 targets so glibc exposes the correct stubs.
 
 If the link step reports missing libraries such as `-lGLESv2`, `-lEGL`, or `-lSDL2`, install the corresponding development packages (or point the build to your cross-compilation sysroot) before rerunning `make`.  The dependency check looks for the `dbus-1` and `libpulse` pkg-config modules and will suggest installing `libdbus-1-dev` and `libpulse-dev` when they are unavailable, temporarily clearing any pkg-config overrides so SDK-provided search paths do not mask host installations.  The bundled libogg autotools build no longer insists on version-suffixed helpers, so providing the base `automake`/`aclocal` pair is sufficient for regenerating build files when needed.  Its `configure` script now disables maintainer mode by default, keeping normal builds from attempting to invoke `aclocal`, and the generated makefiles treat dependency includes as optional so a missing `.deps` directory no longer aborts incremental builds.
 
 When a Sailfish SDK sysroot omits the `dbus-1.pc` metadata, the helper script now probes the sysroot for the canonical D-Bus include directories (`usr/include/dbus-1.0` alongside the companion `dbus-1.0/include` subdirectories) and feeds those paths directly to the Quake II makefiles.  If the sysroot itself is missing those directories but the host has them installed for the target architecture (e.g., via `libdbus-1-dev:armhf` on Debian/Ubuntu), the helper stages the host copies into the toolchain sysroot automatically before continuing.  The build only aborts after emitting a targeted message when neither pkg-config nor the sysroot (even after the host staging pass) provide the headers, keeping the process resilient on SDK images that omit `.pc` files or forget to ship the includes entirely.
 
 When targeting framebuffer or Wayland-only environments without an X11 stack, the SDL2 CMake build now automatically defines `MESA_EGL_NO_X11_HEADERS` and `EGL_NO_X11`.  This mirrors the autotools configuration and prevents the Mesa EGL headers from trying to include `Xlib.h`, unblocking armhf builds that rely solely on the Sailfish SDK sysroot.
+
+### Packaging with `build_rpm.sh`
+
+1. **Prepare the Sailfish SDK.** Install the Sailfish SDK (or Aurora OS build environment) and configure the device targets you plan to ship.  The script queries `sfdk sb2-config -l` for all default targets and iterates over each architecture.
+2. **Seed build dependencies.** Review the `dependencies` variable at the top of the script—packages such as `pulseaudio-devel`, `wayland-devel`, `libGLESv2-devel`, `libxkbcommon-devel`, and toolchain helpers (`autoconf`, `automake`, `libtool`) are installed inside each target via `zypper`.  You can add local requirements to the list before running the helper.
+3. **Choose the execution engine.** Run `./build_rpm.sh` with no arguments to use the standard `sfdk` engine, or pass `aurora` as the first argument to compile and sign packages inside an Aurora OS build container.  The script automatically switches to `docker exec` in the Aurora case and downloads the required signing keys when they are missing.
+4. **Generate the source archive.** On every invocation the helper wipes the previous `build_rpm/BUILD` tree, archives the current Git HEAD into `build_rpm/SOURCES/harbour-quake2.tar.gz`, and prepares an RPM topdir dedicated to the selected engine (`build_rpm` for Sailfish, `build_aurora_rpm` for Aurora).
+5. **Build and validate packages.** For each configured target the helper installs dependencies, invokes `rpmbuild -ba spec/quake2.spec`, and then signs or validates the resulting RPMs.  Aurora builds use `rpmsign-external` and `rpm-validator`; Sailfish SDK builds call `sfdk check` after setting the current target.  Successful artefacts accumulate under `build_rpm/RPMS/<arch>/` (or the Aurora equivalent).
+
+If a build fails, consult the logged `rpmbuild` output inside the corresponding `BUILD` directory and ensure the target has all of the dependencies enabled in its `sb2` environment.  The helper resumes with the next configured target, so you can rerun it after correcting any missing packages or spec issues without rebuilding the already successful architectures.
 
 ## Runtime Verification
 
@@ -67,7 +55,7 @@ For developer builds the default controller database is now committed directly u
 ## Roadmap (Ablauforientiert)
 
 1. **Bestehende Builds stabilisieren** – Die jüngsten GLES2-Änderungen auf realer Sailfish-Hardware verifizieren und fehlende Grafik-/SDL-Entwicklungsbibliotheken in den Build-Umgebungen hinterlegen, damit Releases und Cross-Builds reproduzierbar laufen.
-2. **Build-Tooling dokumentieren** – Schritt-für-Schritt-Anleitungen für `build_rpm.sh` und `build_armhf.sh` ergänzen, damit Maintainer die bereitgestellten Automatisierungsskripte ohne Vorkenntnisse einsetzen können.
+2. **Toolchain-Abhängigkeiten bündeln** – GLESv2-, EGL- und SDL2-Entwicklungspakete gemeinsam mit den Cross-Toolchains bereitstellen, sodass lokale Builds ohne manuelles Nachrüsten durchlaufen.
 3. **Touch-Eingabe vervollständigen** – Eine Bildschirmtastatur in das Overlay integrieren und optionale Auto-Aiming-/Modifikator-Funktionen bereitstellen, um Touch- und Controller-Steuerung zu verbessern.
 4. **Rendering-Pfade modernisieren** – Die GLES2-Pipeline weiter optimieren (Pufferverwaltung, Shader-Pfade, Frame-Interpolation), damit mobile Geräte von stabileren Framerates profitieren.
 5. **Builds automatisieren** – Eine wiederholbare CI-Pipeline aufsetzen, die Cross-Builds, Paketprüfungen und Smoke-Tests orchestriert und die lokalen Skripte nutzt.

@@ -29,16 +29,16 @@
 - [x] Stamp the SailfishOS Premake makefiles with hard-float ARM tuning so glibc no longer requests the soft-float stubs headers during cross-builds.
 - [x] Replace the Sailfish touch overlay mock-up code with a GLES2 shader/VBO pipeline that runs on device hardware.
 - [x] Ship `gamecontrollerdb.txt` with the overlay resources so local builds load default controller mappings without packaging first.
+- [x] Extend the documentation with guided walkthroughs for `build_rpm.sh` und `build_armhf.sh`.
 
 ## Offene Schritte (Roadmap-Reihenfolge)
 
 1. [ ] Validate the GLES2 build on actual Sailfish OS hardware to confirm the runtime touch overlay visuals.
 2. [ ] Provide GLESv2, EGL, and SDL2 development libraries in the build environment (or cross toolchain) so linking succeeds locally.
-3. [ ] Extend the documentation with guided walkthroughs for `build_rpm.sh` und `build_armhf.sh`.
-4. [ ] Implement an on-screen keyboard within the touch overlay and add optional aim-assist/modifier controls.
-5. [ ] Optimise the GLES2 rendering path (Buffer-Management, Shader, Frame-Interpolation) für mobile Performance.
-6. [ ] Automate cross-builds and package linting via a CI-Pipeline auf Basis der vorhandenen Skripte.
-7. [ ] Ergänzen von Overlay-Presets und Skalierungsoptionen für verschiedene Displaygrößen.
-8. [ ] Expand platform support (z. B. ARM64, Wayland-first) innerhalb der Premake-Projekte und Release-Artefakte.
-9. [ ] Aktualisieren der gebündelten Third-Party-Bibliotheken und Etablieren eines Security-Update-Prozesses.
-10. [ ] Einführen regelmäßiger Beta-Builds und Hardware-QA-Schleifen zur frühzeitigen Regressionserkennung.
+3. [ ] Implement an on-screen keyboard within the touch overlay and add optional aim-assist/modifier controls.
+4. [ ] Optimise the GLES2 rendering path (Buffer-Management, Shader, Frame-Interpolation) für mobile Performance.
+5. [ ] Automate cross-builds and package linting via a CI-Pipeline auf Basis der vorhandenen Skripte.
+6. [ ] Ergänzen von Overlay-Presets und Skalierungsoptionen für verschiedene Displaygrößen.
+7. [ ] Expand platform support (z. B. ARM64, Wayland-first) innerhalb der Premake-Projekte und Release-Artefakte.
+8. [ ] Aktualisieren der gebündelten Third-Party-Bibliotheken und Etablieren eines Security-Update-Prozesses.
+9. [ ] Einführen regelmäßiger Beta-Builds und Hardware-QA-Schleifen zur frühzeitigen Regressionserkennung.

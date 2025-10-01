@@ -5,6 +5,7 @@
 - Hardened the SDL bootstrap by aborting on initialisation failures, loading controller mappings from the Sailfish data install, and fixing hot-plug logic to use proper instance identifiers.
 - Bundled the default controller mapping database with the `res/` assets so un-packaged desktop builds keep their SDL mappings in sync with Sailfish releases.
 - Authored step-by-step walkthroughs for `build_armhf.sh` and `build_rpm.sh`, making the release pipeline reproducible for new maintainers.
+- Hardened the Sailfish RPM packaging helper to enumerate every default `.default` target, quote command arguments, and fail loudly when the SDK lacks configured targets.
 
 ## Near-Term Priorities
 1. Validate the refreshed GLES2 overlay on Sailfish OS hardware to confirm input hit boxes and rendering alignment.

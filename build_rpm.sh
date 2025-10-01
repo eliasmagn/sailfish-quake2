@@ -1,96 +1,167 @@
-#!/usr/bin/bash
-export PWD=`pwd`
+#!/usr/bin/env bash
+set -euo pipefail
 
-export engine="sfdk engine exec"
-dependencies="pulseaudio-devel wayland-devel libGLESv2-devel 
-    wayland-egl-devel wayland-protocols-devel libusb-devel 
-    libxkbcommon-devel mce-headers dbus-devel libvorbis-devel 
-    libogg-devel rsync systemd-devel autoconf automake libtool"
-# uncomment right engine for your 
-if [ "$1" == "aurora" ]; then
-    export engine="docker exec --user mersdk -w `pwd` aurora-os-build-engine"
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+usage() {
+    cat <<'USAGE'
+Usage: ./build_rpm.sh [aurora]
+
+Build Sailfish OS (or Aurora OS) RPM packages for the Quake II port.
+
+Positional arguments:
+  aurora    Build the packages inside an Aurora OS build engine instead of
+            the Sailfish SDK. Keys for signing are downloaded automatically
+            when they are not present locally.
+
+The script expects `sfdk` to be available when the Sailfish SDK is used. It
+prepends "$HOME/SailfishOS/bin" to PATH automatically.
+USAGE
+}
+
+mode="sailfish"
+if (($# > 0)); then
+    case "$1" in
+        aurora)
+            mode="aurora"
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            usage
+            exit 1
+            ;;
+    esac
+fi
+
+if [[ "${mode}" == "sailfish" ]]; then
+    export PATH="${HOME}/SailfishOS/bin:${PATH}"
+fi
+
+dependencies=(
+    pulseaudio-devel
+    wayland-devel
+    libGLESv2-devel
+    wayland-egl-devel
+    wayland-protocols-devel
+    libusb-devel
+    libxkbcommon-devel
+    mce-headers
+    dbus-devel
+    libvorbis-devel
+    libogg-devel
+    rsync
+    systemd-devel
+    autoconf
+    automake
+    libtool
+)
+
+if [[ "${mode}" == "aurora" ]]; then
+    ENGINE_CMD=(docker exec --user mersdk -w "${REPO_ROOT}" aurora-os-build-engine)
 else
-    export PATH=$HOME/SailfishOS/bin:${PATH}
-export engine="sfdk engine exec"
+    ENGINE_CMD=(sfdk engine exec)
 fi
 
 build_dir="build_rpm"
-if [[ "${engine}" == *"aurora"* ]]; then
+if [[ "${mode}" == "aurora" ]]; then
     build_dir="build_aurora_rpm"
 fi
-echo "Pack latest git cmmit to an archive: ${build_dir}/SOURCES/harbour-quake2.tar.gz"
-rm -fr `pwd`/${build_dir}/{BUILD,SRPMS}
-mkdir -p `pwd`/${build_dir}/SOURCES
-git archive --output `pwd`/${build_dir}/SOURCES/harbour-quake2.tar.gz HEAD
-#tar czvf `pwd`/${build_dir}/SOURCES/harbour-quake2.tar.gz Engine Ports SDL2 spec
 
-if [[ "${engine}" == *"aurora"* ]]; then
-    for each in key cert; do
-        if [ -f `pwd`/regular_${each}.pem ]; then 
-            echo "Файл ключа regular_${each}.pem найден: OK"
-            continue;
+archive_path="${REPO_ROOT}/${build_dir}/SOURCES/harbour-quake2.tar.gz"
+
+echo "Packing latest git commit to an archive: ${archive_path}"
+rm -rf "${REPO_ROOT}/${build_dir}/BUILD" "${REPO_ROOT}/${build_dir}/SRPMS"
+mkdir -p "${REPO_ROOT}/${build_dir}/SOURCES"
+git -C "${REPO_ROOT}" archive --output "${archive_path}" HEAD
+
+if [[ "${mode}" == "aurora" ]]; then
+    for suffix in key cert; do
+        key_path="${REPO_ROOT}/regular_${suffix}.pem"
+        if [[ -f "${key_path}" ]]; then
+            echo "Файл ключа regular_${suffix}.pem найден: OK"
+            continue
         fi
-        echo -n "Скачиваем ключ regular_${each}.pem для подписи пактов под АврораОС: "
-        curl https://community.omprussia.ru/documentation/files/doc/regular_${each}.pem -o regular_${each}.pem &> /dev/null
-        if [ $? -eq 0 ]; then 
+
+        echo -n "Скачиваем ключ regular_${suffix}.pem для подписи пактов под АврораОС: "
+        if curl -fsSL "https://community.omprussia.ru/documentation/files/doc/regular_${suffix}.pem" \
+            -o "${key_path}"; then
             echo "OK"
         else
             echo "FAIL"
-            echo "Ошибка скачивания regular_${each}.pem: https://community.omprussia.ru/documentation/files/doc/regular_${each}.pem"
+            echo "Ошибка скачивания regular_${suffix}.pem: https://community.omprussia.ru/documentation/files/doc/regular_${suffix}.pem"
             exit 1
         fi
     done
 fi
 
-sfdk_targets=`${engine} sb2-config -l|grep default|grep aarch`
+mapfile -t raw_targets < <("${ENGINE_CMD[@]}" sb2-config -l)
+targets=()
+for entry in "${raw_targets[@]}"; do
+    [[ -z "${entry}" ]] && continue
+    # Extract the first whitespace-delimited field so we ignore the description column.
+    first_field=${entry%%[[:space:]]*}
+    [[ "${first_field}" == *".default" ]] || continue
+    targets+=("${first_field}")
+done
 
-echo "WARNING: Build Quake 2 for ALL your targets in SailfishSDK"
-for each in $sfdk_targets; do
-    target_arch=${each##*-}
-    target_arch=${target_arch/.default/}
-    echo "Build for '$each' target with '$target_arch' architecture"
-    # clean build folder
-    if [ -d `pwd`/${build_dir}/BUILD ]; then
-        rm -fr `pwd`/${build_dir}/BUILD
-    fi
-    target="${engine} sb2 -t $each"
-    #install deps for current target
-    ${target} -R -m sdk-install zypper in -y ${dependencies}
-    
-    # build RPM for current target
-    ${target} rpmbuild --define "_topdir `pwd`/${build_dir}" --define "_arch $target_arch" -ba spec/quake2.spec
-    if [ $? -ne 0 ] ; then 
-        echo "Build RPM for ${each} : FAIL"
-        continue; 
+if ((${#targets[@]} == 0)); then
+    echo "No default sb2 targets detected. Configure targets in the SDK before running this script." >&2
+    exit 1
+fi
+
+echo "WARNING: Building Quake II for all default targets in the configured SDK"
+
+for target in "${targets[@]}"; do
+    target_arch=${target##*-}
+    target_arch=${target_arch%%.default}
+    echo "Build for '${target}' target with '${target_arch}' architecture"
+
+    rm -rf "${REPO_ROOT}/${build_dir}/BUILD"
+
+    # Install dependencies inside the target
+    "${ENGINE_CMD[@]}" sb2 -t "${target}" -R -m sdk-install zypper in -y "${dependencies[@]}"
+
+    # Build RPM for current target
+    if ! "${ENGINE_CMD[@]}" sb2 -t "${target}" rpmbuild \
+        --define "_topdir ${REPO_ROOT}/${build_dir}" \
+        --define "_arch ${target_arch}" -ba spec/quake2.spec; then
+        echo "Build RPM for ${target} : FAIL"
+        continue
     fi
 
-    # sign RPM packacge 
-    if [[ "${engine}" == *"aurora"* ]]; then
+    if [[ "${mode}" == "aurora" ]]; then
         echo -n "Signing RPMs: "
-        ${target} rpmsign-external sign --key `pwd`/regular_key.pem --cert `pwd`/regular_cert.pem `pwd`/${build_dir}/RPMS/${target_arch}/harbour-quake2-1.*
-        if [ $? -ne 0 ] ; then 
+        if ! "${ENGINE_CMD[@]}" sb2 -t "${target}" rpmsign-external sign \
+            --key "${REPO_ROOT}/regular_key.pem" \
+            --cert "${REPO_ROOT}/regular_cert.pem" \
+            "${REPO_ROOT}/${build_dir}/RPMS/${target_arch}/harbour-quake2-1."*; then
             echo "FAIL"
-            break; 
+            break
         fi
         echo "OK"
+
         echo -n "Validate RPMs: "
-        validator_output=`${target} rpm-validator -p regular $(pwd)/${build_dir}/RPMS/${target_arch}/harbour-quake2-1.2* 2>&1`
-        if [ $? -ne 0 ] ; then 
+        if ! validator_output=$("${ENGINE_CMD[@]}" sb2 -t "${target}" rpm-validator -p regular \
+            "${REPO_ROOT}/${build_dir}/RPMS/${target_arch}/harbour-quake2-1.2"* 2>&1); then
             echo "FAIL"
             echo "${validator_output}"
-            break; 
+            break
         fi
         echo "OK"
-    elif [[ "${engine}" == "sfdk "* ]] ;then
+    else
         echo -n "Validate RPM: "
-        sfdk config target=${each/.default/}
-        validator_output=`sfdk check $(pwd)/${build_dir}/RPMS/${target_arch}/harbour-quake2-1.2* 2>&1`
-        if [ $? -ne 0 ] ; then 
+        sfdk config target="${target/.default/}"
+        if ! validator_output=$(sfdk check "${REPO_ROOT}/${build_dir}/RPMS/${target_arch}/harbour-quake2-1.2"* 2>&1); then
             echo "FAIL"
             echo "${validator_output}"
-            break;
+            break
         fi
         echo "OK"
     fi
 done
-echo "All build done! All yopur packages in `pwd`/build_rpm/RPMS"
+
+echo "All builds complete! Packages are available under ${REPO_ROOT}/${build_dir}/RPMS"

@@ -30,6 +30,8 @@
 - [x] Replace the Sailfish touch overlay mock-up code with a GLES2 shader/VBO pipeline that runs on device hardware.
 - [x] Ship `gamecontrollerdb.txt` with the overlay resources so local builds load default controller mappings without packaging first.
 - [x] Extend the documentation with guided walkthroughs for `build_rpm.sh` und `build_armhf.sh`.
+- [x] Harden `build_rpm.sh` so it enumerates every default Scratchbox2 target, quotes paths consistently, and fails fast when the SDK is misconfigured.
+- [x] Document the improved RPM helper workflow, including Aurora mode support and the refreshed usage output.
 
 ## Offene Schritte (Roadmap-Reihenfolge)
 

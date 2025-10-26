@@ -26,6 +26,7 @@
    most of the API. */
 
 #include "../../events/SDL_events_c.h"
+#include "../../core/linux/SDL_evdev.h"
 
 #include "SDL_nullvideo.h"
 #include "SDL_nullevents_c.h"
@@ -33,7 +34,9 @@
 void
 DUMMY_PumpEvents(_THIS)
 {
-    /* do nothing. */
+#ifdef SDL_INPUT_LINUXEV
+    SDL_EVDEV_Poll();
+#endif
 }
 
 #endif /* SDL_VIDEO_DRIVER_DUMMY */

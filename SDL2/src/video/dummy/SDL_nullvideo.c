@@ -42,6 +42,7 @@
 #include "../SDL_sysvideo.h"
 #include "../SDL_pixels_c.h"
 #include "../../events/SDL_events_c.h"
+#include "../../core/linux/SDL_evdev.h"
 
 #include "SDL_nullvideo.h"
 #include "SDL_nullevents_c.h"
@@ -124,6 +125,12 @@ DUMMY_VideoInit(_THIS)
     SDL_zero(mode);
     SDL_AddDisplayMode(&_this->displays[0], &mode);
 
+#ifdef SDL_INPUT_LINUXEV
+    if (SDL_EVDEV_Init() < 0) {
+        return -1;
+    }
+#endif
+
     /* We're done! */
     return 0;
 }
@@ -137,6 +144,9 @@ DUMMY_SetDisplayMode(_THIS, SDL_VideoDisplay * display, SDL_DisplayMode * mode)
 void
 DUMMY_VideoQuit(_THIS)
 {
+#ifdef SDL_INPUT_LINUXEV
+    SDL_EVDEV_Quit();
+#endif
 }
 
 #endif /* SDL_VIDEO_DRIVER_DUMMY */

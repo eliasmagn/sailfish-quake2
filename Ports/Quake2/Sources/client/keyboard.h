@@ -346,6 +346,7 @@ extern qboolean chat_team;
 
 void Char_Event(int key, bool specialOnlyFlag);
 void Key_Event(int key, bool down);
+bool Key_IsDown(int key);
 void Key_Init();
 void Key_WriteBindings(FILE *f);
 void Key_ReadConsoleHistory();
